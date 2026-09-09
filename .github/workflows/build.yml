@@ -17,6 +17,8 @@ jobs:
           node-version: 22.12.0
       - name: Install dependencies
         run: npm install
+      - name: Audit dependencies
+        run: npm audit --audit-level=moderate
       - name: Check Electron main process
         run: node --check electron/main.cjs
       - name: Check Electron preload
