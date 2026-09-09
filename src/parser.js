@@ -1,11 +1,14 @@
 export const AI_FORMAT_RULES = `REGLAS DE FORMATO PARA VIDEOS STUDIO
 
 OBJETIVO
-Genera diapositivas usando EXACTAMENTE la estructura indicada. No cambies los nombres de los campos y no agregues campos nuevos.
+Genera un video por diapositivas usando EXACTAMENTE la estructura indicada. No cambies los nombres de los campos.
 
 FORMATO OBLIGATORIO
 
 DIAPOSITIVA 1
+GANCHO:
+Frase breve y potente que capte la atención al comenzar esta parte del video.
+
 TÍTULO:
 Título de la diapositiva
 
@@ -20,65 +23,66 @@ CONTENIDO:
 - Dato, cifra o idea complementaria 3.
 
 LECTURA:
-Texto que debe leer el presentador durante la grabación. Puede estar redactado como uno o varios párrafos naturales. Debe corresponder a la misma diapositiva y ser coherente con el TÍTULO, CUERPO y CONTENIDO.
+Texto exacto que debe leer el presentador durante la grabación. Puede ser uno o varios párrafos naturales.
 
-//
+VISUAL:
+TIPO: IMAGEN
+DESCRIPCIÓN: Describe la imagen, gráfico, tabla, comparativa, cronología o recurso que ayudaría a entender esta diapositiva.
 
-DIAPOSITIVA 2
-TÍTULO:
-...
-
-CUERPO:
-- ...
-
-CONTENIDO:
-- ...
-
-LECTURA:
-...
+CTA:
+TIPO: NINGUNO
+TEXTO:
 
 //
 
 REGLAS
-1. Cada bloque debe comenzar con DIAPOSITIVA seguido de su número consecutivo.
-2. Usa exactamente estos cuatro campos: TÍTULO, CUERPO, CONTENIDO y LECTURA.
-3. CUERPO es información que se mostrará visualmente en la diapositiva.
-4. CONTENIDO es información que también se mostrará visualmente en la diapositiva.
-5. CUERPO debe estar SIEMPRE escrito por puntos, usando un guion al inicio de cada punto: - texto.
-6. CONTENIDO debe estar SIEMPRE escrito por puntos, usando un guion al inicio de cada punto: - texto.
-7. No escribas párrafos largos dentro de CUERPO ni CONTENIDO.
-8. LECTURA contiene únicamente lo que el presentador debe leer en el prompter.
-9. LECTURA no se mostrará en la diapositiva final.
-10. LECTURA puede ser un texto hablado natural; no es obligatorio escribirla por puntos.
-11. No pongas instrucciones de cámara, edición, gestos o producción dentro de LECTURA.
-12. Mantén coherencia entre lo que se ve (TÍTULO + CUERPO + CONTENIDO) y lo que se lee (LECTURA).
-13. Separa cada diapositiva con una línea que contenga únicamente //.
-14. No omitas ningún campo.
-15. No transformes, renombres ni combines los campos.
+1. Cada bloque comienza con DIAPOSITIVA seguido de su número consecutivo.
+2. Usa los campos GANCHO, TÍTULO, CUERPO, CONTENIDO, LECTURA, VISUAL y CTA.
+3. CUERPO y CONTENIDO son lo que verá el espectador y deben estar SIEMPRE por puntos con guion.
+4. No escribas párrafos largos en CUERPO ni CONTENIDO.
+5. LECTURA es únicamente lo que leerá el presentador en el prompter. No se muestra en la diapositiva final.
+6. VISUAL indica qué apoyo debe utilizar el montaje. TIPO puede ser IMAGEN, GRAFICO_BARRAS, TABLA, COMPARATIVA, CRONOLOGIA, DIAGRAMA o NINGUNO.
+7. Si VISUAL es un gráfico o tabla, incluye dentro de VISUAL los datos necesarios en líneas claras.
+8. CTA indica si esa diapositiva necesita un llamado a la acción. TIPO puede ser NINGUNO, SUSCRIBIRSE, COMENTAR, PREGUNTA, LIKE u OTRO.
+9. La primera diapositiva debe incluir un GANCHO fuerte.
+10. Aproximadamente a la mitad del total de diapositivas debe existir un CTA para suscribirse, comentar, responder una pregunta, dar like o participar.
+11. La última diapositiva debe incluir un CTA de SUSCRIBIRSE.
+12. El CTA debe ser coherente también con la LECTURA de esa diapositiva.
+13. Mantén coherencia entre TÍTULO, CUERPO, CONTENIDO, LECTURA y VISUAL.
+14. No pongas instrucciones de cámara, gestos o edición dentro de LECTURA.
+15. Separa cada diapositiva con una línea que contenga únicamente //.
 16. Devuelve solamente las diapositivas en este formato, sin explicaciones antes ni después.`;
 
-function trimBlankLines(lines) {
+function trimBlankLines(lines = []) {
   const copy = [...lines];
   while (copy.length && !copy[0].trim()) copy.shift();
   while (copy.length && !copy[copy.length - 1].trim()) copy.pop();
   return copy.join('\n');
 }
 
-function isBulletedBlock(value) {
-  const lines = value
+function isBulletedBlock(value = '') {
+  const lines = String(value)
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
   return lines.length > 0 && lines.every((line) => /^[-•*]\s+\S/.test(line));
 }
 
+function ctaIsActive(cta = '') {
+  const normalized = cta.toUpperCase();
+  return !!normalized && !/TIPO\s*:\s*NINGUNO/.test(normalized) && !/^NINGUNO\s*$/.test(normalized.trim());
+}
+
 function finalizeSlide(current, slides, errors, warnings) {
   if (!current) return;
 
+  const hook = trimBlankLines(current.hook);
   const title = trimBlankLines(current.title);
   const body = trimBlankLines(current.body);
   const content = trimBlankLines(current.content);
   const reading = trimBlankLines(current.reading);
+  const visual = trimBlankLines(current.visual);
+  const cta = trimBlankLines(current.cta);
 
   if (!Number.isFinite(current.number)) {
     errors.push('Se encontró una diapositiva sin número válido.');
@@ -93,23 +97,50 @@ function finalizeSlide(current, slides, errors, warnings) {
   const contentBulleted = !content || isBulletedBlock(content);
   if (body && !bodyBulleted) errors.push(`Diapositiva ${current.number}: CUERPO debe estar escrito por puntos.`);
   if (content && !contentBulleted) errors.push(`Diapositiva ${current.number}: CONTENIDO debe estar escrito por puntos.`);
-  if (!reading) warnings.push(`Diapositiva ${current.number}: falta LECTURA. Podrás conservar el proyecto, pero no grabar esta diapositiva hasta agregarla.`);
+  if (!reading) warnings.push(`Diapositiva ${current.number}: falta LECTURA. No podrás grabarla hasta agregarla.`);
+  if (!visual) warnings.push(`Diapositiva ${current.number}: falta VISUAL. El montaje quedará pendiente.`);
 
   slides.push({
     number: current.number,
+    hook,
     title,
     body,
     content,
     reading,
+    visual,
+    cta,
     validation: {
+      hook: !!hook,
       title: !!title,
       body: !!body,
       content: !!content,
       reading: !!reading,
+      visual: !!visual,
+      cta: ctaIsActive(cta),
       bodyBulleted,
       contentBulleted,
     },
   });
+}
+
+function validateStoryStructure(slides, warnings) {
+  if (!slides.length) return;
+  if (!slides[0].hook?.trim()) {
+    warnings.push('La primera diapositiva no tiene GANCHO. La plantilla recomienda comenzar el video con uno.');
+  }
+
+  if (slides.length >= 3) {
+    const middleIndex = Math.floor((slides.length - 1) / 2);
+    const candidates = slides.slice(Math.max(0, middleIndex - 1), Math.min(slides.length, middleIndex + 2));
+    if (!candidates.some((slide) => ctaIsActive(slide.cta))) {
+      warnings.push('Falta un CTA intermedio aproximadamente a la mitad del video.');
+    }
+  }
+
+  const last = slides[slides.length - 1];
+  if (!/SUSCRIB/i.test(last.cta || '')) {
+    warnings.push(`Diapositiva ${last.number}: el CTA final debería incluir SUSCRIBIRSE.`);
+  }
 }
 
 export function parseSlides(rawText = '') {
@@ -138,10 +169,13 @@ export function parseSlides(rawText = '') {
       if (current) pushCurrent();
       current = {
         number: Number(slideMatch[1]),
+        hook: [],
         title: [],
         body: [],
         content: [],
         reading: [],
+        visual: [],
+        cta: [],
       };
       section = null;
       continue;
@@ -157,47 +191,35 @@ export function parseSlides(rawText = '') {
       continue;
     }
 
-    const titleMatch = line.match(/^\s*T[IÍ]TULO\s*:\s*(.*)$/i);
-    if (titleMatch) {
-      section = 'title';
-      if (titleMatch[1]) current.title.push(titleMatch[1]);
-      continue;
-    }
+    const fieldMatchers = [
+      ['hook', /^\s*GANCHO\s*:\s*(.*)$/i],
+      ['title', /^\s*T[IÍ]TULO\s*:\s*(.*)$/i],
+      ['body', /^\s*CUERPO\s*:\s*(.*)$/i],
+      ['content', /^\s*CONTENIDO\s*:\s*(.*)$/i],
+      ['reading', /^\s*LECTURA\s*:\s*(.*)$/i],
+      ['visual', /^\s*VISUAL\s*:\s*(.*)$/i],
+      ['cta', /^\s*CTA\s*:\s*(.*)$/i],
+    ];
 
-    const bodyMatch = line.match(/^\s*CUERPO\s*:\s*(.*)$/i);
-    if (bodyMatch) {
-      section = 'body';
-      if (bodyMatch[1]) current.body.push(bodyMatch[1]);
-      continue;
+    let matched = false;
+    for (const [key, matcher] of fieldMatchers) {
+      const match = line.match(matcher);
+      if (!match) continue;
+      section = key;
+      if (match[1]) current[key].push(match[1]);
+      matched = true;
+      break;
     }
-
-    const contentMatch = line.match(/^\s*CONTENIDO\s*:\s*(.*)$/i);
-    if (contentMatch) {
-      section = 'content';
-      if (contentMatch[1]) current.content.push(contentMatch[1]);
-      continue;
-    }
-
-    const readingMatch = line.match(/^\s*LECTURA\s*:\s*(.*)$/i);
-    if (readingMatch) {
-      section = 'reading';
-      if (readingMatch[1]) current.reading.push(readingMatch[1]);
-      continue;
-    }
+    if (matched) continue;
 
     if (section) current[section].push(line);
-    else if (trimmed) warnings.push(`Diapositiva ${current.number}: texto fuera de TÍTULO/CUERPO/CONTENIDO/LECTURA: “${trimmed}”.`);
+    else if (trimmed) warnings.push(`Diapositiva ${current.number}: texto fuera de los campos reconocidos: “${trimmed}”.`);
   }
 
   if (current) pushCurrent();
 
-  if (outsideText.length) {
-    warnings.push('Se encontró texto fuera de las diapositivas y se ignoró.');
-  }
-
-  if (!slides.length) {
-    errors.push('No se detectaron diapositivas. Usa bloques que empiecen con “DIAPOSITIVA 1”, “DIAPOSITIVA 2”, etc.');
-  }
+  if (outsideText.length) warnings.push('Se encontró texto fuera de las diapositivas y se ignoró.');
+  if (!slides.length) errors.push('No se detectaron diapositivas. Usa bloques que empiecen con “DIAPOSITIVA 1”, “DIAPOSITIVA 2”, etc.');
 
   const seen = new Set();
   for (const slide of slides) {
@@ -205,5 +227,6 @@ export function parseSlides(rawText = '') {
     seen.add(slide.number);
   }
 
+  validateStoryStructure(slides, warnings);
   return { slides, errors, warnings };
 }
