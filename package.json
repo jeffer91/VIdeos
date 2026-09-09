@@ -10,6 +10,8 @@
     "start:web": "vite --host 0.0.0.0",
     "prebuild": "node scripts/copy-ffmpeg.mjs",
     "build": "vite build",
+    "audit": "node scripts/audit-workflow.mjs",
+    "test": "npm run audit",
     "preview": "vite preview --host 0.0.0.0",
     "postinstall": "node scripts/copy-ffmpeg.mjs"
   },
