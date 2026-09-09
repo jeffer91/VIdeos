@@ -1,0 +1,414 @@
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+body {
+  min-height: 0;
+}
+
+.compact-shell {
+  width: 100%;
+  max-width: none;
+  height: 100vh;
+  min-height: 0;
+  padding: 10px 14px 12px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.compact-topbar {
+  min-height: 48px;
+  margin-bottom: 8px;
+}
+
+.compact-topbar .brand {
+  font-size: 20px;
+}
+
+.compact-topbar .subtitle {
+  margin-top: 1px;
+  font-size: 10px;
+}
+
+.compact-topbar .status-pill {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 10px;
+}
+
+.compact-workspace {
+  height: 100%;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 10px;
+}
+
+.compact-recorder {
+  height: 100%;
+  min-height: 0;
+  padding: 9px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  overflow: hidden;
+  border-radius: 13px;
+}
+
+.compact-toolbar {
+  min-height: 34px;
+  margin: 0;
+}
+
+.compact-toolbar .mode-switch button {
+  padding: 6px 10px;
+  font-size: 10px;
+}
+
+.compact-toolbar .quality-badges span {
+  padding: 4px 7px;
+  font-size: 9px;
+}
+
+.compact-stage {
+  align-self: center;
+  justify-self: center;
+  width: min(100%, 980px);
+  max-height: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+}
+
+.compact-stage.audio-stage {
+  width: min(100%, 760px);
+  min-height: 0;
+  aspect-ratio: 16 / 9;
+}
+
+.compact-stage .stage-placeholder {
+  gap: 4px;
+  padding: 12px;
+}
+
+.compact-stage .stage-placeholder strong {
+  font-size: 14px;
+}
+
+.compact-stage .stage-placeholder span {
+  font-size: 10px;
+}
+
+.compact-stage .audio-live-card,
+.compact-stage .audio-playback-card {
+  gap: 8px;
+}
+
+.compact-stage .audio-live-card h2 {
+  font-size: 17px;
+}
+
+.compact-stage .audio-live-card p {
+  font-size: 10px;
+}
+
+.compact-stage .audio-icon {
+  width: 56px;
+  height: 56px;
+  font-size: 9px;
+}
+
+.recorder-footer {
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto minmax(190px, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.footer-meter {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 28px minmax(80px, 1fr) 32px;
+  align-items: center;
+  gap: 6px;
+  color: #697685;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.footer-meter strong {
+  text-align: right;
+  color: #7e8b99;
+  font-size: 9px;
+}
+
+.footer-meter .meter-track {
+  height: 5px;
+}
+
+.compact-timer {
+  margin: 0;
+  min-width: 128px;
+  font-size: 25px;
+  line-height: 1;
+  letter-spacing: 0.025em;
+}
+
+.compact-controls {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.compact-controls .button,
+.compact-actions .button,
+.compact-recovery .button {
+  min-height: 32px;
+  border-radius: 8px;
+  padding: 0 11px;
+  font-size: 10px;
+}
+
+.compact-side {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto auto;
+  align-content: start;
+  gap: 9px;
+  overflow: hidden;
+}
+
+.compact-card {
+  padding: 10px;
+  border-radius: 12px;
+}
+
+.compact-heading {
+  margin-bottom: 8px;
+}
+
+.compact-heading .eyebrow {
+  font-size: 8px;
+}
+
+.compact-heading h2 {
+  font-size: 14px;
+}
+
+.compact-heading .text-button {
+  padding: 2px 0;
+  font-size: 9px;
+}
+
+.compact-field {
+  gap: 3px;
+  margin-bottom: 7px;
+}
+
+.compact-field > span {
+  font-size: 9px;
+}
+
+.compact-field select {
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 7px;
+  font-size: 10px;
+}
+
+.compact-technical {
+  gap: 5px;
+  margin-top: 7px;
+}
+
+.compact-technical > div,
+.compact-sizes > div {
+  padding: 7px;
+  border-radius: 7px;
+}
+
+.compact-technical span,
+.compact-sizes span {
+  margin-bottom: 2px;
+  font-size: 8px;
+}
+
+.compact-technical strong,
+.compact-sizes strong {
+  font-size: 10px;
+}
+
+.compact-warning {
+  margin-top: 7px;
+  padding: 6px 7px;
+  border-radius: 7px;
+  font-size: 9px;
+  line-height: 1.3;
+}
+
+.compact-copy {
+  margin: -1px 0 8px;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.compact-sizes {
+  gap: 5px;
+}
+
+.compact-actions {
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.compact-actions .button {
+  width: 100%;
+}
+
+.compact-progress {
+  gap: 5px;
+  margin-top: 7px;
+}
+
+.compact-progress .progress-label {
+  font-size: 9px;
+}
+
+.compact-progress .progress-track {
+  height: 5px;
+}
+
+.compact-recovery {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px;
+  border-radius: 11px;
+}
+
+.compact-recovery strong {
+  font-size: 10px;
+}
+
+.compact-recovery span {
+  font-size: 8px;
+}
+
+.compact-side .optimized-preview {
+  margin-top: 7px;
+  padding-top: 7px;
+}
+
+.compact-side .optimized-preview summary {
+  font-size: 9px;
+}
+
+.compact-shell .toast {
+  right: 14px;
+  bottom: 12px;
+  width: min(420px, calc(100vw - 28px));
+  padding: 9px 10px;
+  font-size: 10px;
+}
+
+@media (max-height: 820px) {
+  .compact-shell {
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+
+  .compact-topbar {
+    min-height: 42px;
+    margin-bottom: 6px;
+  }
+
+  .compact-stage {
+    width: min(100%, 880px);
+  }
+
+  .compact-card {
+    padding: 8px;
+  }
+
+  .compact-copy {
+    display: none;
+  }
+
+  .compact-field {
+    margin-bottom: 5px;
+  }
+
+  .compact-actions {
+    margin-top: 6px;
+  }
+}
+
+@media (max-height: 720px) {
+  .compact-stage {
+    width: min(100%, 760px);
+  }
+
+  .compact-topbar .subtitle,
+  .compact-toolbar .quality-badges {
+    display: none;
+  }
+
+  .compact-technical > div,
+  .compact-sizes > div {
+    padding: 5px;
+  }
+
+  .compact-warning {
+    display: none;
+  }
+
+  .compact-controls .button,
+  .compact-actions .button {
+    min-height: 29px;
+  }
+}
+
+@media (max-width: 1120px) {
+  .compact-workspace {
+    grid-template-columns: minmax(0, 1fr) 270px;
+  }
+
+  .compact-stage {
+    width: min(100%, 820px);
+  }
+
+  .recorder-footer {
+    grid-template-columns: minmax(130px, 1fr) auto auto;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 900px) {
+  html,
+  body,
+  #root {
+    overflow: auto;
+  }
+
+  .compact-shell {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .compact-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .compact-side {
+    height: auto;
+    overflow: visible;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
