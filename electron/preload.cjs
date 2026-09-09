@@ -8,5 +8,6 @@ contextBridge.exposeInMainWorld('videosStudio', {
     setDefault: (options) => ipcRenderer.invoke('library:set-default', options),
     getDefaults: () => ipcRenderer.invoke('library:get-defaults'),
     reveal: (options) => ipcRenderer.invoke('library:reveal', options),
+    open: (options) => ipcRenderer.invoke('library:open', options),
   },
 });
