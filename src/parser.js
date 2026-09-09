@@ -27,7 +27,7 @@ Texto exacto que debe leer el presentador durante la grabación. Puede ser uno o
 
 VISUAL:
 TIPO: IMAGEN
-DESCRIPCIÓN: Describe la imagen, gráfico, tabla, comparativa, cronología o recurso que ayudaría a entender esta diapositiva.
+DESCRIPCIÓN: Describe la imagen, gráfico, tabla, comparativa, cronología o recurso que ayudará a entender esta diapositiva.
 
 CTA:
 TIPO: NINGUNO
@@ -36,7 +36,7 @@ TEXTO:
 //
 
 REGLAS
-1. Cada bloque comienza con DIAPOSITIVA seguido de su número consecutivo.
+1. Cada bloque comienza con DIAPOSITIVA seguido de su número consecutivo: 1, 2, 3, 4...
 2. Usa los campos GANCHO, TÍTULO, CUERPO, CONTENIDO, LECTURA, VISUAL y CTA.
 3. CUERPO y CONTENIDO son lo que verá el espectador y deben estar SIEMPRE por puntos con guion.
 4. No escribas párrafos largos en CUERPO ni CONTENIDO.
@@ -51,7 +51,11 @@ REGLAS
 13. Mantén coherencia entre TÍTULO, CUERPO, CONTENIDO, LECTURA y VISUAL.
 14. No pongas instrucciones de cámara, gestos o edición dentro de LECTURA.
 15. Separa cada diapositiva con una línea que contenga únicamente //.
-16. Devuelve solamente las diapositivas en este formato, sin explicaciones antes ni después.`;
+16. No omitas VISUAL ni CTA. Si no hacen falta, usa TIPO: NINGUNO.
+17. Devuelve solamente las diapositivas en este formato, sin explicaciones antes ni después.`;
+
+const VISUAL_TYPES = new Set(['IMAGEN', 'GRAFICO_BARRAS', 'GRÁFICO_BARRAS', 'TABLA', 'COMPARATIVA', 'CRONOLOGIA', 'CRONOLOGÍA', 'DIAGRAMA', 'NINGUNO']);
+const CTA_TYPES = new Set(['NINGUNO', 'SUSCRIBIRSE', 'COMENTAR', 'PREGUNTA', 'LIKE', 'OTRO']);
 
 function trimBlankLines(lines = []) {
   const copy = [...lines];
@@ -68,8 +72,14 @@ function isBulletedBlock(value = '') {
   return lines.length > 0 && lines.every((line) => /^[-•*]\s+\S/.test(line));
 }
 
+function blockType(value = '') {
+  return String(value).match(/^\s*TIPO\s*:\s*([^\n]+)$/im)?.[1]?.trim().toUpperCase() || '';
+}
+
 function ctaIsActive(cta = '') {
-  const normalized = cta.toUpperCase();
+  const type = blockType(cta);
+  if (type) return type !== 'NINGUNO';
+  const normalized = String(cta).toUpperCase();
   return !!normalized && !/TIPO\s*:\s*NINGUNO/.test(normalized) && !/^NINGUNO\s*$/.test(normalized.trim());
 }
 
@@ -83,6 +93,8 @@ function finalizeSlide(current, slides, errors, warnings) {
   const reading = trimBlankLines(current.reading);
   const visual = trimBlankLines(current.visual);
   const cta = trimBlankLines(current.cta);
+  const visualType = blockType(visual);
+  const ctaType = blockType(cta);
 
   if (!Number.isFinite(current.number)) {
     errors.push('Se encontró una diapositiva sin número válido.');
@@ -98,7 +110,14 @@ function finalizeSlide(current, slides, errors, warnings) {
   if (body && !bodyBulleted) errors.push(`Diapositiva ${current.number}: CUERPO debe estar escrito por puntos.`);
   if (content && !contentBulleted) errors.push(`Diapositiva ${current.number}: CONTENIDO debe estar escrito por puntos.`);
   if (!reading) warnings.push(`Diapositiva ${current.number}: falta LECTURA. No podrás grabarla hasta agregarla.`);
-  if (!visual) warnings.push(`Diapositiva ${current.number}: falta VISUAL. El montaje quedará pendiente.`);
+
+  if (!visual) warnings.push(`Diapositiva ${current.number}: falta VISUAL. Usa al menos “TIPO: NINGUNO”.`);
+  else if (!visualType) warnings.push(`Diapositiva ${current.number}: VISUAL no indica TIPO.`);
+  else if (!VISUAL_TYPES.has(visualType)) warnings.push(`Diapositiva ${current.number}: TIPO de VISUAL no reconocido: ${visualType}.`);
+
+  if (!cta) warnings.push(`Diapositiva ${current.number}: falta CTA. Usa al menos “TIPO: NINGUNO”.`);
+  else if (!ctaType) warnings.push(`Diapositiva ${current.number}: CTA no indica TIPO.`);
+  else if (!CTA_TYPES.has(ctaType)) warnings.push(`Diapositiva ${current.number}: TIPO de CTA no reconocido: ${ctaType}.`);
 
   slides.push({
     number: current.number,
@@ -109,6 +128,8 @@ function finalizeSlide(current, slides, errors, warnings) {
     reading,
     visual,
     cta,
+    visualType,
+    ctaType,
     validation: {
       hook: !!hook,
       title: !!title,
@@ -123,8 +144,16 @@ function finalizeSlide(current, slides, errors, warnings) {
   });
 }
 
-function validateStoryStructure(slides, warnings) {
+function validateStoryStructure(slides, errors, warnings) {
   if (!slides.length) return;
+
+  slides.forEach((slide, index) => {
+    const expected = index + 1;
+    if (slide.number !== expected) {
+      errors.push(`La numeración debe ser consecutiva. Se esperaba DIAPOSITIVA ${expected} y se encontró DIAPOSITIVA ${slide.number}.`);
+    }
+  });
+
   if (!slides[0].hook?.trim()) {
     warnings.push('La primera diapositiva no tiene GANCHO. La plantilla recomienda comenzar el video con uno.');
   }
@@ -227,6 +256,6 @@ export function parseSlides(rawText = '') {
     seen.add(slide.number);
   }
 
-  validateStoryStructure(slides, warnings);
+  validateStoryStructure(slides, errors, warnings);
   return { slides, errors, warnings };
 }
