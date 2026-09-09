@@ -17,5 +17,7 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install
-      - name: Build
+      - name: Check Electron main process
+        run: node --check electron/main.cjs
+      - name: Build renderer
         run: npm run build
