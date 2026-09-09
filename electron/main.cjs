@@ -58,7 +58,13 @@ function libraryDirectory({ scope = 'global', projectId = '', category = 'intros
     if (!projectId) throw new Error('Falta el proyecto para esta biblioteca.');
     return path.join(libraryRoot(), 'projects', safeSegment(projectId), category);
   }
+  if (scope !== 'global') throw new Error('Ámbito de biblioteca no válido.');
   return path.join(libraryRoot(), 'global', category);
+}
+
+function isInside(root, target) {
+  const relative = path.relative(path.resolve(root), path.resolve(target));
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
 async function ensureDirectory(directory) {
@@ -108,7 +114,20 @@ async function listDirectory(options) {
 async function readDefaults() {
   const file = path.join(libraryRoot(), 'defaults.json');
   try {
-    return JSON.parse(await fs.readFile(file, 'utf8'));
+    const value = JSON.parse(await fs.readFile(file, 'utf8'));
+    const clean = {};
+    for (const [category, target] of Object.entries(value || {})) {
+      if (!LIBRARY_CATEGORIES.has(category) || !target) continue;
+      const root = libraryDirectory({ scope: 'global', category });
+      if (!isInside(root, target)) continue;
+      try {
+        await fs.access(target);
+        clean[category] = target;
+      } catch {
+        // Ignore stale defaults that point to deleted files.
+      }
+    }
+    return clean;
   } catch {
     return {};
   }
@@ -128,7 +147,6 @@ function configureLibraryIpc() {
       properties: ['openFile', 'multiSelections'],
       filters: [
         { name: 'Videos', extensions: ['mp4', 'webm', 'mov', 'm4v', 'avi', 'mkv'] },
-        { name: 'Todos los archivos', extensions: ['*'] },
       ],
     });
     if (response.canceled) return [];
@@ -157,12 +175,13 @@ function configureLibraryIpc() {
   ipcMain.handle('library:delete', async (_event, options = {}) => {
     const directory = libraryDirectory(options);
     const target = path.resolve(String(options.path || ''));
-    const allowedRoot = path.resolve(directory);
-    if (!target.startsWith(`${allowedRoot}${path.sep}`)) throw new Error('Archivo fuera de la biblioteca.');
+    if (!target || !isInside(directory, target) || target === path.resolve(directory)) {
+      throw new Error('Archivo fuera de la biblioteca.');
+    }
     await fs.unlink(target);
     const defaults = await readDefaults();
     for (const key of Object.keys(defaults)) {
-      if (defaults[key] === target) delete defaults[key];
+      if (path.resolve(defaults[key]) === target) delete defaults[key];
     }
     await writeDefaults(defaults);
     return true;
@@ -171,7 +190,17 @@ function configureLibraryIpc() {
   ipcMain.handle('library:set-default', async (_event, options = {}) => {
     if (!LIBRARY_CATEGORIES.has(options.category)) throw new Error('Categoría no válida.');
     const defaults = await readDefaults();
-    defaults[options.category] = options.path || '';
+    if (!options.path) {
+      delete defaults[options.category];
+      await writeDefaults(defaults);
+      return defaults;
+    }
+
+    const root = libraryDirectory({ scope: 'global', category: options.category });
+    const target = path.resolve(String(options.path));
+    if (!isInside(root, target) || target === path.resolve(root)) throw new Error('El predeterminado debe pertenecer a la biblioteca global.');
+    await fs.access(target);
+    defaults[options.category] = target;
     await writeDefaults(defaults);
     return defaults;
   });
@@ -179,8 +208,19 @@ function configureLibraryIpc() {
   ipcMain.handle('library:get-defaults', async () => readDefaults());
 
   ipcMain.handle('library:reveal', async (_event, options = {}) => {
-    const target = options.path || libraryRoot();
+    const target = path.resolve(String(options.path || libraryRoot()));
+    if (!isInside(libraryRoot(), target)) throw new Error('Ruta fuera de la biblioteca.');
     shell.showItemInFolder(target);
+    return true;
+  });
+
+  ipcMain.handle('library:open', async (_event, options = {}) => {
+    const target = path.resolve(String(options.path || ''));
+    if (!target || !isInside(libraryRoot(), target) || target === path.resolve(libraryRoot())) {
+      throw new Error('Archivo fuera de la biblioteca.');
+    }
+    const result = await shell.openPath(target);
+    if (result) throw new Error(result);
     return true;
   });
 }
