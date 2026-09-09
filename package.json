@@ -13,6 +13,10 @@
     "preview": "vite preview --host 0.0.0.0",
     "postinstall": "node scripts/copy-ffmpeg.mjs"
   },
+  "allowScripts": {
+    "electron@44.3.0": true,
+    "esbuild@0.21.5": true
+  },
   "dependencies": {
     "@ffmpeg/core": "0.12.10",
     "@ffmpeg/ffmpeg": "0.12.15",
