@@ -60,7 +60,7 @@ El corte se procesa con FFmpeg.wasm local. El original se mantiene y la app guar
 
 ## Ejecutar
 
-Requiere Node.js 18 o superior.
+Requiere **Node.js 22.12.0 o superior**, porque Electron 44 exige esa versión mínima.
 
 ```bash
 npm install
@@ -89,7 +89,8 @@ La auditoría comprueba, entre otras cosas:
 - conexión entre preload e IPC de Electron;
 - presencia de recuperación y corte;
 - política de transición como clip después de una escena;
-- protección de `library/` frente a Git.
+- protección de `library/` frente a Git;
+- versión mínima de Node compatible con Electron.
 
 GitHub Actions ejecuta la auditoría, revisa sintaxis de `electron/main.cjs` y `electron/preload.cjs`, y compila el renderer.
 
