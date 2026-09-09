@@ -13,18 +13,28 @@ function isTrustedRendererOrigin(value = '') {
   );
 }
 
-function configureMediaPermissions() {
-  session.defaultSession.setPermissionCheckHandler(
-    (_webContents, permission, requestingOrigin) =>
-      permission === 'media' && isTrustedRendererOrigin(requestingOrigin),
-  );
+function isTrustedMediaRequest(webContents, requestingOrigin = '') {
+  const currentUrl = webContents?.getURL?.() || '';
+  return isTrustedRendererOrigin(requestingOrigin) || isTrustedRendererOrigin(currentUrl);
+}
 
-  session.defaultSession.setPermissionRequestHandler(
-    (webContents, permission, callback, details) => {
-      const requestingUrl = details?.requestingUrl || webContents?.getURL?.() || '';
-      callback(permission === 'media' && isTrustedRendererOrigin(requestingUrl));
-    },
-  );
+function configureMediaPermissions() {
+  const currentSession = session.defaultSession;
+
+  currentSession.setPermissionCheckHandler((webContents, permission, requestingOrigin) => {
+    if (permission !== 'media') return false;
+    return isTrustedMediaRequest(webContents, requestingOrigin);
+  });
+
+  currentSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    if (permission !== 'media') {
+      callback(false);
+      return;
+    }
+
+    const requestingUrl = details?.requestingUrl || details?.securityOrigin || '';
+    callback(isTrustedMediaRequest(webContents, requestingUrl));
+  });
 }
 
 async function startRenderer() {
@@ -41,21 +51,20 @@ async function startRenderer() {
   });
 
   await viteServer.listen();
-
   const localUrls = viteServer.resolvedUrls?.local || [];
   return localUrls[0] || 'http://127.0.0.1:5173/';
 }
 
 async function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1480,
-    height: 920,
-    minWidth: 1000,
-    minHeight: 700,
+    width: 1380,
+    height: 840,
+    minWidth: 980,
+    minHeight: 640,
     show: false,
     autoHideMenuBar: true,
     backgroundColor: '#0b0d10',
-    title: 'Videos Recorder',
+    title: 'Videos · Grabador local',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -93,9 +102,7 @@ app.whenReady().then(async () => {
   await createWindow();
 
   app.on('activate', async () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      await createWindow();
-    }
+    if (BrowserWindow.getAllWindows().length === 0) await createWindow();
   });
 });
 
