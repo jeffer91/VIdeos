@@ -1,0 +1,127 @@
+.internal-cut-editor {
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid #25303a;
+  border-radius: 9px;
+  background: #0b1016;
+}
+
+.internal-cut-editor > strong {
+  font-size: 10px;
+}
+
+.internal-cut-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  gap: 6px;
+  align-items: end;
+}
+
+.internal-cut-inputs label {
+  display: grid;
+  gap: 4px;
+}
+
+.internal-cut-inputs label span {
+  color: #788491;
+  font-size: 8px;
+}
+
+.internal-cut-inputs input {
+  min-width: 0;
+  height: 30px;
+  border: 1px solid #2d3945;
+  border-radius: 7px;
+  padding: 0 8px;
+  background: #080c11;
+  color: #dce5ed;
+}
+
+.cut-range-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.cut-range-list > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 25px;
+  padding: 0 7px;
+  border: 1px solid #3b4651;
+  border-radius: 999px;
+  color: #cbd5de;
+  font-size: 8px;
+}
+
+.cut-range-list button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #dd858b;
+  cursor: pointer;
+}
+
+.cut-range-list small {
+  color: #687582;
+  font-size: 8px;
+}
+
+.audit-issues {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 10px;
+  padding: 11px;
+  border-color: #5c4929;
+  background: #19140b;
+}
+
+.audit-issues strong {
+  font-size: 11px;
+}
+
+.audit-issues span {
+  color: #d3bd82;
+  font-size: 9px;
+}
+
+.recovery-banner {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #655329;
+  border-radius: 9px;
+  padding: 5px 8px;
+  background: #1b160c;
+  color: #d0bb84;
+  font-size: 9px;
+}
+
+.recovery-banner button {
+  min-height: 26px;
+  border: 1px solid #806b35;
+  border-radius: 7px;
+  padding: 0 9px;
+  background: #2b2312;
+  color: #e0c987;
+  cursor: pointer;
+}
+
+.scene-presenter audio {
+  width: calc(100% - 16px);
+  margin: auto;
+}
+
+@media (max-width: 1180px) {
+  .internal-cut-inputs {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .internal-cut-inputs button {
+    grid-column: 1 / -1;
+  }
+}
