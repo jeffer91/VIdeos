@@ -5,5 +5,6 @@ import './compact.css';
 import './studio.css';
 import './format-rules.css';
 import './production.css';
+import './audit.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
