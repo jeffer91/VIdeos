@@ -271,6 +271,31 @@ body {
   width: 100%;
 }
 
+/* Before a recording exists, do not present disabled actions as if they were broken. */
+.optimization-card:not(:has(.compact-actions .button-primary:not(:disabled))):not(:has(.compact-progress)) .compact-actions {
+  display: none;
+}
+
+.optimization-card:not(:has(.compact-actions .button-primary:not(:disabled))):not(:has(.compact-progress))::after {
+  content: "Graba y finaliza un video para habilitar Optimizar y Descargar.";
+  display: block;
+  margin-top: 8px;
+  padding: 9px 10px;
+  border: 1px dashed #2d3945;
+  border-radius: 8px;
+  background: #0a0f15;
+  color: #8190a0;
+  font-size: 9px;
+  font-weight: 650;
+  line-height: 1.35;
+  text-align: center;
+}
+
+/* Once a recording is available, make the enabled actions visually obvious. */
+.optimization-card:has(.compact-actions .button-primary:not(:disabled)) .compact-actions .button:not(:disabled) {
+  opacity: 1;
+}
+
 .compact-progress {
   gap: 5px;
   margin-top: 7px;
