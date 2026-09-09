@@ -158,11 +158,14 @@ const production = await read('src/ProductionApp.jsx');
 const mainProcess = await read('electron/main.cjs');
 const preload = await read('electron/preload.cjs');
 const gitignore = await read('.gitignore');
+const packageJson = JSON.parse(await read('package.json'));
 
+const navBlock = production.match(/const NAV_ITEMS = \[([\s\S]*?)\n\];/)?.[1] || '';
+assert(navBlock, 'No se encontró NAV_ITEMS.');
 const navOrder = ['Contenido', 'Grabación', 'Corte', 'Biblioteca', 'Unión', 'Video memes', 'Resultado'];
 let previousIndex = -1;
 for (const label of navOrder) {
-  const index = production.indexOf(`'${label}'`);
+  const index = navBlock.indexOf(`'${label}'`);
   assert(index > previousIndex, `La navegación no mantiene el orden esperado en ${label}.`);
   previousIndex = index;
 }
@@ -171,7 +174,9 @@ assert(production.includes("import { cutMedia } from './ffmpeg';"), 'Corte debe 
 assert(production.includes('getRecordingMeta'), 'La recuperación de grabaciones debe leer metadata.');
 assert(production.includes('deleteSlideTake'), 'La actualización de contenido debe poder limpiar tomas huérfanas.');
 assert(production.includes('Transición después de esta escena'), 'La transición debe modelarse como un clip después de una escena (modo A).');
+assert(production.includes('transiciones entre escenas'), 'Resultado debe describir transiciones entre escenas.');
 assert(production.includes('El video principal se congela; aparece el meme; al terminar, continúa exactamente donde estaba.'), 'La lógica de video memes debe conservar pausa + reanudación.');
+assert(production.includes('joinTake?.mode === \'audio\''), 'Unión debe distinguir tomas de audio y video.');
 
 const channels = [...preload.matchAll(/ipcRenderer\.invoke\('([^']+)'/g)].map((match) => match[1]);
 assert(channels.length > 0, 'Preload debe exponer canales IPC.');
@@ -180,5 +185,6 @@ for (const channel of channels) {
 }
 
 assert(gitignore.split(/\r?\n/).some((line) => line.trim() === 'library/'), 'La carpeta library/ debe estar ignorada por Git para evitar subir videos locales.');
+assert(packageJson.engines?.node === '>=22.12.0', 'package.json debe exigir Node >=22.12.0 para Electron 44.');
 
 console.log(`Auditoría OK · ${parsed.slides.length} diapositivas de prueba · ${channels.length} canales IPC conectados · ${navOrder.length} etapas verificadas.`);
