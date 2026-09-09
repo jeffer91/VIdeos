@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "prestart": "node scripts/copy-ffmpeg.mjs",
     "start": "electron .",
