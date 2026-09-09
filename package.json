@@ -1,0 +1,25 @@
+{
+  "name": "videos-recorder",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prestart": "node scripts/copy-ffmpeg.mjs",
+    "start": "vite --host 0.0.0.0",
+    "prebuild": "node scripts/copy-ffmpeg.mjs",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "postinstall": "node scripts/copy-ffmpeg.mjs"
+  },
+  "dependencies": {
+    "@ffmpeg/core": "0.12.10",
+    "@ffmpeg/ffmpeg": "0.12.15",
+    "@ffmpeg/util": "0.12.2",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "4.3.4",
+    "vite": "5.4.11"
+  }
+}
