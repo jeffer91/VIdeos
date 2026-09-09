@@ -47,7 +47,6 @@ function useBlobUrl(blob) {
       setUrl(null);
       return undefined;
     }
-
     const nextUrl = URL.createObjectURL(blob);
     setUrl(nextUrl);
     return () => URL.revokeObjectURL(nextUrl);
@@ -66,6 +65,11 @@ function extensionFor(blob, mode) {
   return blob?.type?.includes('mp4') ? 'mp4' : 'webm';
 }
 
+function timestampFilename(prefix, extension) {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  return `${prefix}-${stamp}.${extension}`;
+}
+
 function downloadBlob(blob, filename) {
   if (!blob) return;
   const url = URL.createObjectURL(blob);
@@ -78,14 +82,14 @@ function downloadBlob(blob, filename) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function timestampFilename(prefix, extension) {
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  return `${prefix}-${stamp}.${extension}`;
+function deviceLabel(device, type, index) {
+  if (device.label) return device.label;
+  return `${type} ${index + 1}`;
 }
 
 export default function App() {
   const [mode, setMode] = useState('video');
-  const [status, setStatus] = useState('idle');
+  const [status, setStatus] = useState('detecting');
   const [devices, setDevices] = useState({ cameras: [], microphones: [] });
   const [cameraId, setCameraId] = useState('');
   const [microphoneId, setMicrophoneId] = useState('');
@@ -108,19 +112,22 @@ export default function App() {
   const recordingStartedAtRef = useRef(0);
   const pausedStartedAtRef = useRef(0);
   const pausedTotalRef = useRef(0);
+  const elapsedRef = useRef(0);
   const audioContextRef = useRef(null);
   const meterFrameRef = useRef(null);
+  const mountedRef = useRef(true);
 
   const recordingUrl = useBlobUrl(recordingBlob);
   const optimizedUrl = useBlobUrl(optimizedBlob);
 
-  const busy = ['recording', 'paused', 'saving'].includes(status) || isOptimizing;
+  const busy = ['detecting', 'recording', 'paused', 'saving'].includes(status) || isOptimizing;
   const isFullHd = resolution?.width >= 1920 && resolution?.height >= 1080;
 
   const statusText = useMemo(() => {
     if (isOptimizing) return 'Optimizando';
     const labels = {
-      idle: 'Sin activar',
+      detecting: 'Detectando',
+      idle: 'Sin dispositivo',
       ready: 'Listo',
       recording: 'Grabando',
       paused: 'Pausado',
@@ -139,7 +146,7 @@ export default function App() {
       audioContextRef.current.close().catch(() => {});
       audioContextRef.current = null;
     }
-    setMicLevel(0);
+    if (mountedRef.current) setMicLevel(0);
   }
 
   function setupAudioMeter(stream) {
@@ -151,13 +158,15 @@ export default function App() {
     const source = context.createMediaStreamSource(stream);
     const analyser = context.createAnalyser();
     analyser.fftSize = 512;
-    analyser.smoothingTimeConstant = 0.75;
+    analyser.smoothingTimeConstant = 0.72;
     source.connect(analyser);
+    context.resume().catch(() => {});
 
     const samples = new Uint8Array(analyser.fftSize);
     audioContextRef.current = context;
 
     const draw = () => {
+      if (!mountedRef.current) return;
       analyser.getByteTimeDomainData(samples);
       let sum = 0;
       for (const sample of samples) {
@@ -165,7 +174,7 @@ export default function App() {
         sum += normalized * normalized;
       }
       const rms = Math.sqrt(sum / samples.length);
-      setMicLevel(Math.min(100, Math.round(rms * 260)));
+      setMicLevel(Math.min(100, Math.round(rms * 280)));
       meterFrameRef.current = requestAnimationFrame(draw);
     };
 
@@ -177,23 +186,51 @@ export default function App() {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
-    if (liveVideoRef.current) {
-      liveVideoRef.current.srcObject = null;
-    }
+    if (liveVideoRef.current) liveVideoRef.current.srcObject = null;
     cleanupAudioMeter();
   }
 
-  async function refreshDevices(stream) {
+  async function refreshDevices(stream = streamRef.current) {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
     const list = await navigator.mediaDevices.enumerateDevices();
-    setDevices({
-      cameras: list.filter((device) => device.kind === 'videoinput'),
-      microphones: list.filter((device) => device.kind === 'audioinput'),
-    });
+    if (!mountedRef.current) return;
 
-    const videoDevice = stream.getVideoTracks()[0]?.getSettings?.().deviceId;
-    const audioDevice = stream.getAudioTracks()[0]?.getSettings?.().deviceId;
-    if (!cameraId && videoDevice) setCameraId(videoDevice);
-    if (!microphoneId && audioDevice) setMicrophoneId(audioDevice);
+    const cameras = list.filter((device) => device.kind === 'videoinput');
+    const microphones = list.filter((device) => device.kind === 'audioinput');
+    setDevices({ cameras, microphones });
+
+    const videoDevice = stream?.getVideoTracks?.()[0]?.getSettings?.().deviceId || '';
+    const audioDevice = stream?.getAudioTracks?.()[0]?.getSettings?.().deviceId || '';
+
+    setCameraId((current) => {
+      if (videoDevice) return videoDevice;
+      return cameras.some((device) => device.deviceId === current) ? current : '';
+    });
+    setMicrophoneId((current) => {
+      if (audioDevice) return audioDevice;
+      return microphones.some((device) => device.deviceId === current) ? current : '';
+    });
+  }
+
+  function buildConstraints(targetMode, targetCameraId, targetMicrophoneId, useExactDevices = true) {
+    const audio = {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      channelCount: 1,
+      sampleRate: 48000,
+      ...(useExactDevices && targetMicrophoneId ? { deviceId: { exact: targetMicrophoneId } } : {}),
+    };
+
+    const video = {
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      aspectRatio: { ideal: 16 / 9 },
+      frameRate: { ideal: 30, max: 30 },
+      ...(useExactDevices && targetCameraId ? { deviceId: { exact: targetCameraId } } : {}),
+    };
+
+    return { audio, video: targetMode === 'video' ? video : false };
   }
 
   async function openStream(overrides = {}) {
@@ -201,45 +238,43 @@ export default function App() {
     setNotice('');
 
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
-      setError('Este navegador no permite grabación con cámara y micrófono. Usa Chrome o Edge de escritorio.');
+      setError('Electron no tiene acceso a los dispositivos multimedia en este equipo.');
+      setStatus('idle');
       return null;
     }
 
-    stopMediaStream();
-
-    const targetMode = overrides.mode || mode;
+    const targetMode = overrides.mode ?? mode;
     const targetCameraId = overrides.cameraId ?? cameraId;
     const targetMicrophoneId = overrides.microphoneId ?? microphoneId;
 
-    const audioConstraints = {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-      channelCount: 1,
-      sampleRate: 48000,
-      ...(targetMicrophoneId ? { deviceId: { exact: targetMicrophoneId } } : {}),
-    };
+    setStatus('detecting');
+    stopMediaStream();
 
-    const videoConstraints = {
-      width: { ideal: 1920 },
-      height: { ideal: 1080 },
-      aspectRatio: { ideal: 16 / 9 },
-      frameRate: { ideal: 30, max: 30 },
-      ...(targetCameraId ? { deviceId: { exact: targetCameraId } } : {}),
-    };
-
+    let stream;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: audioConstraints,
-        video: targetMode === 'video' ? videoConstraints : false,
-      });
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(
+          buildConstraints(targetMode, targetCameraId, targetMicrophoneId, true),
+        );
+      } catch (firstError) {
+        if (!['OverconstrainedError', 'NotFoundError', 'DevicesNotFoundError'].includes(firstError?.name)) {
+          throw firstError;
+        }
+        stream = await navigator.mediaDevices.getUserMedia(
+          buildConstraints(targetMode, '', '', false),
+        );
+      }
+
+      if (!mountedRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return null;
+      }
 
       streamRef.current = stream;
       setupAudioMeter(stream);
 
       if (targetMode === 'video') {
-        const videoTrack = stream.getVideoTracks()[0];
-        const settings = videoTrack?.getSettings?.() || {};
+        const settings = stream.getVideoTracks()[0]?.getSettings?.() || {};
         setResolution({
           width: settings.width || 0,
           height: settings.height || 0,
@@ -247,7 +282,7 @@ export default function App() {
         });
 
         requestAnimationFrame(() => {
-          if (liveVideoRef.current) {
+          if (liveVideoRef.current && streamRef.current === stream) {
             liveVideoRef.current.srcObject = stream;
             liveVideoRef.current.play().catch(() => {});
           }
@@ -257,16 +292,19 @@ export default function App() {
       }
 
       await refreshDevices(stream);
-      setStatus('ready');
+      if (mountedRef.current) setStatus('ready');
       return stream;
     } catch (caught) {
       console.error(caught);
+      await refreshDevices(null).catch(() => {});
+      if (!mountedRef.current) return null;
+
       const message =
-        caught?.name === 'NotAllowedError'
-          ? 'Debes permitir acceso a la cámara y al micrófono para grabar.'
-          : caught?.name === 'OverconstrainedError'
-            ? 'El dispositivo seleccionado no está disponible con esa configuración. Prueba otro dispositivo.'
-            : 'No se pudo abrir la cámara o el micrófono. Revisa que ninguna otra aplicación los esté bloqueando.';
+        caught?.name === 'NotAllowedError' || caught?.name === 'PermissionDeniedError'
+          ? 'Windows o Electron bloqueó la cámara/micrófono. Habilita el acceso en Configuración > Privacidad y seguridad > Cámara y Micrófono.'
+          : caught?.name === 'NotReadableError' || caught?.name === 'TrackStartError'
+            ? 'La cámara o el micrófono están ocupados por otra aplicación. Cierra la otra app y pulsa Reintentar.'
+            : 'No se pudo abrir la cámara o el micrófono. Revisa que estén conectados y habilitados en Windows.';
       setError(message);
       setStatus('idle');
       return null;
@@ -277,7 +315,9 @@ export default function App() {
     if (!recordingStartedAtRef.current) return;
     const now = Date.now();
     const currentPause = pausedStartedAtRef.current ? now - pausedStartedAtRef.current : 0;
-    setElapsedMs(now - recordingStartedAtRef.current - pausedTotalRef.current - currentPause);
+    const value = now - recordingStartedAtRef.current - pausedTotalRef.current - currentPause;
+    elapsedRef.current = value;
+    setElapsedMs(value);
   }
 
   useEffect(() => {
@@ -290,21 +330,30 @@ export default function App() {
   }, [status]);
 
   useEffect(() => {
-    let active = true;
+    mountedRef.current = true;
 
-    (async () => {
+    const initialise = async () => {
       try {
         const meta = await getRecordingMeta();
-        if (!meta) return;
-        const chunks = await getChunks();
-        if (active && chunks.length) setRecoveryMeta(meta);
+        const chunks = meta ? await getChunks() : [];
+        if (mountedRef.current && meta && chunks.length) setRecoveryMeta(meta);
       } catch (caught) {
         console.warn('No se pudo comprobar la recuperación local.', caught);
       }
-    })();
+
+      await openStream({ mode: 'video', cameraId: '', microphoneId: '' });
+    };
+
+    const onDeviceChange = () => {
+      refreshDevices(streamRef.current).catch(() => {});
+    };
+
+    navigator.mediaDevices?.addEventListener?.('devicechange', onDeviceChange);
+    initialise();
 
     return () => {
-      active = false;
+      mountedRef.current = false;
+      navigator.mediaDevices?.removeEventListener?.('devicechange', onDeviceChange);
       stopMediaStream();
     };
   }, []);
@@ -322,7 +371,7 @@ export default function App() {
     try {
       await navigator.storage?.persist?.();
     } catch {
-      // Persistence is optional; recording still works in IndexedDB.
+      // Optional in Electron.
     }
 
     try {
@@ -354,26 +403,22 @@ export default function App() {
 
       recorder.onerror = (event) => {
         console.error(event.error || event);
-        setError('La grabación encontró un error. Detén la sesión y recupera lo que se haya guardado localmente.');
+        setError('La grabación encontró un error. Finaliza la sesión para conservar los fragmentos disponibles.');
       };
 
       recorder.onstop = async () => {
         try {
           const writeResults = await Promise.allSettled(pendingWritesRef.current);
-          const failedWrite = writeResults.some((result) => result.status === 'rejected');
-          if (failedWrite) {
-            throw new Error('No se pudieron guardar todos los fragmentos de la grabación.');
+          if (writeResults.some((result) => result.status === 'rejected')) {
+            throw new Error('No se pudieron guardar todos los fragmentos.');
           }
 
           const rows = await getChunks();
           if (!rows.length) throw new Error('La grabación no produjo datos.');
 
-          const blob = new Blob(
-            rows.map((row) => row.blob),
-            { type: recorder.mimeType || mimeType || rows[0].blob.type },
-          );
-
-          setRecordingBlob(blob);
+          const blob = new Blob(rows.map((row) => row.blob), {
+            type: recorder.mimeType || mimeType || rows[0].blob.type,
+          });
           const trackSettings = stream.getVideoTracks()[0]?.getSettings?.() || {};
           const meta = {
             sessionId,
@@ -383,13 +428,15 @@ export default function App() {
             width: trackSettings.width || 0,
             height: trackSettings.height || 0,
             frameRate: trackSettings.frameRate || 0,
-            durationMs: elapsedMs,
+            durationMs: elapsedRef.current,
             createdAt: Date.now(),
           };
+
+          setRecordingBlob(blob);
           await setRecordingMeta(meta);
           setRecoveryMeta(meta);
           setStatus('stopped');
-          setNotice('Grabación guardada localmente. Ya puedes reproducirla, optimizarla o descargarla.');
+          setNotice('Grabación lista. Puedes reproducirla, optimizarla o descargarla.');
         } catch (caught) {
           console.error(caught);
           setError(caught.message || 'No se pudo preparar la grabación final.');
@@ -403,6 +450,7 @@ export default function App() {
       recordingStartedAtRef.current = Date.now();
       pausedStartedAtRef.current = 0;
       pausedTotalRef.current = 0;
+      elapsedRef.current = 0;
       setElapsedMs(0);
 
       const trackSettings = stream.getVideoTracks()[0]?.getSettings?.() || {};
@@ -421,7 +469,7 @@ export default function App() {
       setStatus('recording');
     } catch (caught) {
       console.error(caught);
-      setError('No se pudo iniciar la grabación. Revisa los permisos y el espacio libre del navegador.');
+      setError('No se pudo iniciar la grabación. Revisa permisos y espacio disponible.');
     }
   }
 
@@ -455,33 +503,22 @@ export default function App() {
     try {
       const meta = (await getRecordingMeta()) || recoveryMeta;
       const rows = await getChunks();
-      if (!meta || !rows.length) {
-        setRecoveryMeta(null);
-        throw new Error('No hay una grabación recuperable.');
-      }
+      if (!meta || !rows.length) throw new Error('No hay una grabación recuperable.');
 
       stopMediaStream();
-      const recovered = new Blob(
-        rows.map((row) => row.blob),
-        { type: meta.mimeType || rows[0].blob.type },
-      );
+      const recovered = new Blob(rows.map((row) => row.blob), {
+        type: meta.mimeType || rows[0].blob.type,
+      });
       setMode(meta.mode || 'video');
       setRecordingBlob(recovered);
       setOptimizedBlob(null);
-      setElapsedMs(meta.durationMs || 0);
+      elapsedRef.current = meta.durationMs || 0;
+      setElapsedMs(elapsedRef.current);
       if (meta.mode === 'video' && meta.width && meta.height) {
-        setResolution({
-          width: meta.width,
-          height: meta.height,
-          frameRate: meta.frameRate || 0,
-        });
+        setResolution({ width: meta.width, height: meta.height, frameRate: meta.frameRate || 0 });
       }
       setStatus('stopped');
-      setNotice(
-        meta.status === 'recording'
-          ? 'Se recuperaron los fragmentos guardados antes de que la sesión se interrumpiera.'
-          : 'Se recuperó la última grabación local.',
-      );
+      setNotice('Se recuperó la última grabación local.');
     } catch (caught) {
       setError(caught.message || 'No se pudo recuperar la grabación.');
     }
@@ -499,14 +536,12 @@ export default function App() {
       setOptimizedBlob(result);
       setNotice(
         result.size < recordingBlob.size
-          ? 'Optimización completada manteniendo Full HD en video.'
-          : 'Optimización completada. En este archivo el resultado no fue más pequeño que el original.',
+          ? 'Optimización completada manteniendo Full HD.'
+          : 'Optimización completada. El original ya estaba muy comprimido.',
       );
     } catch (caught) {
       console.error(caught);
-      setError(
-        'No se pudo optimizar este archivo. El original sigue intacto y puedes descargarlo. En videos muy largos, FFmpeg puede quedarse sin memoria del navegador.',
-      );
+      setError('No se pudo optimizar este archivo. El original permanece intacto.');
     } finally {
       setIsOptimizing(false);
     }
@@ -517,42 +552,53 @@ export default function App() {
     setRecordingBlob(null);
     setOptimizedBlob(null);
     setOptimizationProgress(0);
+    elapsedRef.current = 0;
     setElapsedMs(0);
     setResolution(null);
     setNotice('');
     setError('');
-    setStatus('idle');
     setRecoveryMeta(null);
     await clearRecordingData().catch(() => {});
+    await openStream({ mode, cameraId, microphoneId });
   }
 
-  async function applyDevices() {
-    if (busy) return;
-    await openStream({ cameraId, microphoneId });
-  }
-
-  function changeMode(nextMode) {
+  async function changeMode(nextMode) {
     if (busy || nextMode === mode) return;
-    stopMediaStream();
     setMode(nextMode);
-    setStatus('idle');
-    setResolution(null);
     setRecordingBlob(null);
     setOptimizedBlob(null);
+    elapsedRef.current = 0;
     setElapsedMs(0);
     setError('');
     setNotice('');
+    await openStream({ mode: nextMode, cameraId, microphoneId });
+  }
+
+  async function changeCamera(nextId) {
+    setCameraId(nextId);
+    if (!busy && status !== 'stopped') {
+      await openStream({ mode, cameraId: nextId, microphoneId });
+    }
+  }
+
+  async function changeMicrophone(nextId) {
+    setMicrophoneId(nextId);
+    if (!busy && status !== 'stopped') {
+      await openStream({ mode, cameraId, microphoneId: nextId });
+    }
   }
 
   const originalExtension = recordingBlob ? extensionFor(recordingBlob, mode) : 'webm';
   const optimizedExtension = mode === 'video' ? 'mp4' : 'm4a';
+  const cameraCount = devices.cameras.length;
+  const microphoneCount = devices.microphones.length;
 
   return (
-    <div className="app-shell">
-      <header className="topbar">
+    <div className="app-shell compact-shell">
+      <header className="topbar compact-topbar">
         <div>
           <div className="brand">Videos</div>
-          <p className="subtitle">Grabación local · sin nube · sin servidor</p>
+          <p className="subtitle">Grabación local · 1080p · sin nube</p>
         </div>
         <div className={`status-pill status-${status}${isOptimizing ? ' status-optimizing' : ''}`}>
           <span className="status-dot" />
@@ -560,39 +606,30 @@ export default function App() {
         </div>
       </header>
 
-      <main className="workspace">
-        <section className="recorder-panel">
-          <div className="panel-toolbar">
+      <main className="workspace compact-workspace">
+        <section className="recorder-panel compact-recorder">
+          <div className="panel-toolbar compact-toolbar">
             <div className="mode-switch" role="group" aria-label="Modo de grabación">
-              <button
-                className={mode === 'video' ? 'active' : ''}
-                onClick={() => changeMode('video')}
-                disabled={busy}
-              >
+              <button className={mode === 'video' ? 'active' : ''} onClick={() => changeMode('video')} disabled={busy}>
                 Video + audio
               </button>
-              <button
-                className={mode === 'audio' ? 'active' : ''}
-                onClick={() => changeMode('audio')}
-                disabled={busy}
-              >
+              <button className={mode === 'audio' ? 'active' : ''} onClick={() => changeMode('audio')} disabled={busy}>
                 Solo audio
               </button>
             </div>
-
             <div className="quality-badges">
               {mode === 'video' && <span>16:9</span>}
-              {mode === 'video' && <span>1080p objetivo</span>}
+              {mode === 'video' && <span>1080p</span>}
               <span>30 fps</span>
             </div>
           </div>
 
-          <div className={`media-stage ${mode === 'audio' ? 'audio-stage' : ''}`}>
+          <div className={`media-stage compact-stage ${mode === 'audio' ? 'audio-stage' : ''}`}>
             {mode === 'video' ? (
               recordingUrl && status === 'stopped' ? (
                 <video className="playback" src={recordingUrl} controls playsInline />
               ) : (
-                <video className="live-video" ref={liveVideoRef} muted playsInline />
+                <video className="live-video" ref={liveVideoRef} muted autoPlay playsInline />
               )
             ) : recordingUrl && status === 'stopped' ? (
               <div className="audio-playback-card">
@@ -602,15 +639,15 @@ export default function App() {
             ) : (
               <div className="audio-live-card">
                 <div className="audio-icon">MIC</div>
-                <h2>{status === 'idle' ? 'Activa el micrófono' : 'Micrófono preparado'}</h2>
-                <p>Grabación de voz local a 48 kHz cuando el dispositivo lo permite.</p>
+                <h2>{status === 'detecting' ? 'Detectando micrófono…' : 'Micrófono preparado'}</h2>
+                <p>48 kHz cuando el dispositivo lo permite.</p>
               </div>
             )}
 
-            {mode === 'video' && !recordingUrl && status === 'idle' && (
+            {mode === 'video' && !recordingUrl && status !== 'ready' && status !== 'recording' && status !== 'paused' && (
               <div className="stage-placeholder">
-                <strong>Cámara apagada</strong>
-                <span>Actívala para comprobar encuadre, resolución y micrófono.</span>
+                <strong>{status === 'detecting' ? 'Detectando cámara…' : 'Cámara no disponible'}</strong>
+                <span>{status === 'detecting' ? 'Buscando cámaras y micrófonos conectados.' : 'Revisa permisos o pulsa Reintentar.'}</span>
               </div>
             )}
 
@@ -622,244 +659,160 @@ export default function App() {
             )}
           </div>
 
-          <div className="meter-row">
-            <span>MIC</span>
-            <div className="meter-track">
-              <div className="meter-fill" style={{ width: `${Math.max(2, micLevel)}%` }} />
+          <div className="recorder-footer">
+            <div className="footer-meter">
+              <span>MIC</span>
+              <div className="meter-track">
+                <div className="meter-fill" style={{ width: `${Math.max(streamRef.current ? 2 : 0, micLevel)}%` }} />
+              </div>
+              <strong>{micLevel}%</strong>
             </div>
-            <strong>{micLevel}%</strong>
-          </div>
 
-          <div className="timer">{formatTime(elapsedMs)}</div>
+            <div className="timer compact-timer">{formatTime(elapsedMs)}</div>
 
-          <div className="primary-controls">
-            {status === 'idle' && (
-              <button className="button button-secondary" onClick={() => openStream()}>
-                Activar {mode === 'video' ? 'cámara y micrófono' : 'micrófono'}
-              </button>
-            )}
-
-            {status === 'ready' && (
-              <button className="button button-record" onClick={startRecording}>
-                <span className="button-rec-dot" />
-                Grabar
-              </button>
-            )}
-
-            {status === 'recording' && (
-              <>
-                <button className="button button-secondary" onClick={pauseRecording}>
-                  Pausar
+            <div className="primary-controls compact-controls">
+              {status === 'detecting' && <button className="button button-secondary" disabled>Detectando…</button>}
+              {status === 'idle' && (
+                <button className="button button-secondary" onClick={() => openStream({ mode, cameraId, microphoneId })}>
+                  Reintentar
                 </button>
-                <button className="button button-stop" onClick={stopRecording}>
-                  Finalizar
+              )}
+              {status === 'ready' && (
+                <button className="button button-record" onClick={startRecording}>
+                  <span className="button-rec-dot" /> Grabar
                 </button>
-              </>
-            )}
-
-            {status === 'paused' && (
-              <>
-                <button className="button button-primary" onClick={resumeRecording}>
-                  Continuar
-                </button>
-                <button className="button button-stop" onClick={stopRecording}>
-                  Finalizar
-                </button>
-              </>
-            )}
-
-            {status === 'saving' && (
-              <button className="button button-secondary" disabled>
-                Guardando fragmentos…
-              </button>
-            )}
-
-            {status === 'stopped' && (
-              <button className="button button-secondary" onClick={newRecording} disabled={isOptimizing}>
-                Nueva grabación
-              </button>
-            )}
+              )}
+              {status === 'recording' && (
+                <>
+                  <button className="button button-secondary" onClick={pauseRecording}>Pausar</button>
+                  <button className="button button-stop" onClick={stopRecording}>Finalizar</button>
+                </>
+              )}
+              {status === 'paused' && (
+                <>
+                  <button className="button button-primary" onClick={resumeRecording}>Continuar</button>
+                  <button className="button button-stop" onClick={stopRecording}>Finalizar</button>
+                </>
+              )}
+              {status === 'saving' && <button className="button button-secondary" disabled>Guardando…</button>}
+              {status === 'stopped' && (
+                <button className="button button-secondary" onClick={newRecording} disabled={isOptimizing}>Nueva</button>
+              )}
+            </div>
           </div>
         </section>
 
-        <aside className="side-panel">
-          <section className="settings-card">
-            <div className="section-heading">
+        <aside className="side-panel compact-side">
+          <section className="settings-card compact-card">
+            <div className="section-heading compact-heading">
               <div>
                 <span className="eyebrow">DISPOSITIVOS</span>
                 <h2>Entrada</h2>
               </div>
-              {(status === 'ready' || status === 'idle') && streamRef.current && (
-                <button className="text-button" onClick={applyDevices} disabled={busy}>
-                  Aplicar
-                </button>
-              )}
+              <button
+                className="text-button"
+                onClick={() => openStream({ mode, cameraId, microphoneId })}
+                disabled={['recording', 'paused', 'saving'].includes(status) || isOptimizing}
+              >
+                Actualizar
+              </button>
             </div>
 
             {mode === 'video' && (
-              <label className="field">
-                <span>Cámara</span>
-                <select value={cameraId} onChange={(event) => setCameraId(event.target.value)} disabled={busy}>
+              <label className="field compact-field">
+                <span>Cámara · {cameraCount}</span>
+                <select value={cameraId} onChange={(event) => changeCamera(event.target.value)} disabled={busy || status === 'stopped'}>
                   <option value="">Predeterminada</option>
                   {devices.cameras.map((device, index) => (
-                    <option key={device.deviceId} value={device.deviceId}>
-                      {device.label || `Cámara ${index + 1}`}
+                    <option key={device.deviceId || `camera-${index}`} value={device.deviceId}>
+                      {deviceLabel(device, 'Cámara', index)}
                     </option>
                   ))}
                 </select>
               </label>
             )}
 
-            <label className="field">
-              <span>Micrófono</span>
-              <select
-                value={microphoneId}
-                onChange={(event) => setMicrophoneId(event.target.value)}
-                disabled={busy}
-              >
+            <label className="field compact-field">
+              <span>Micrófono · {microphoneCount}</span>
+              <select value={microphoneId} onChange={(event) => changeMicrophone(event.target.value)} disabled={busy || status === 'stopped'}>
                 <option value="">Predeterminado</option>
                 {devices.microphones.map((device, index) => (
-                  <option key={device.deviceId} value={device.deviceId}>
-                    {device.label || `Micrófono ${index + 1}`}
+                  <option key={device.deviceId || `microphone-${index}`} value={device.deviceId}>
+                    {deviceLabel(device, 'Micrófono', index)}
                   </option>
                 ))}
               </select>
             </label>
 
-            <div className="technical-grid">
+            <div className="technical-grid compact-technical">
               {mode === 'video' && (
                 <>
-                  <div>
-                    <span>Resolución real</span>
-                    <strong>
-                      {resolution?.width && resolution?.height
-                        ? `${resolution.width} × ${resolution.height}`
-                        : '—'}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>FPS reales</span>
-                    <strong>{resolution?.frameRate ? Number(resolution.frameRate).toFixed(0) : '—'}</strong>
-                  </div>
+                  <div><span>Resolución</span><strong>{resolution?.width ? `${resolution.width} × ${resolution.height}` : '—'}</strong></div>
+                  <div><span>FPS</span><strong>{resolution?.frameRate ? Number(resolution.frameRate).toFixed(0) : '—'}</strong></div>
                 </>
               )}
-              <div>
-                <span>Procesamiento</span>
-                <strong>Local</strong>
-              </div>
-              <div>
-                <span>Nube</span>
-                <strong>No</strong>
-              </div>
+              <div><span>Cámaras</span><strong>{cameraCount}</strong></div>
+              <div><span>Micrófonos</span><strong>{microphoneCount}</strong></div>
             </div>
 
             {mode === 'video' && resolution && !isFullHd && (
-              <div className="inline-warning">
-                La cámara está entregando {resolution.width} × {resolution.height}. La app pidió 1920 × 1080,
-                pero el dispositivo o el navegador eligió una resolución menor.
+              <div className="inline-warning compact-warning">
+                Cámara actual: {resolution.width} × {resolution.height}. La app solicita 1920 × 1080.
               </div>
             )}
           </section>
 
-          <section className="settings-card optimization-card">
-            <div className="section-heading">
-              <div>
-                <span className="eyebrow">RESULTADO</span>
-                <h2>Optimización</h2>
-              </div>
+          <section className="settings-card optimization-card compact-card">
+            <div className="section-heading compact-heading">
+              <div><span className="eyebrow">RESULTADO</span><h2>Optimización</h2></div>
             </div>
 
-            <p className="card-copy">
-              La grabación se prioriza para que sea fluida. La compresión pesada se hace después, nunca mientras grabas.
-            </p>
+            <p className="card-copy compact-copy">La compresión se ejecuta después de grabar para mantener la captura fluida.</p>
 
-            <div className="size-comparison">
-              <div>
-                <span>Original</span>
-                <strong>{recordingBlob ? formatBytes(recordingBlob.size) : '—'}</strong>
-              </div>
-              <div>
-                <span>Optimizado</span>
-                <strong>{optimizedBlob ? formatBytes(optimizedBlob.size) : '—'}</strong>
-              </div>
+            <div className="size-comparison compact-sizes">
+              <div><span>Original</span><strong>{recordingBlob ? formatBytes(recordingBlob.size) : '—'}</strong></div>
+              <div><span>Optimizado</span><strong>{optimizedBlob ? formatBytes(optimizedBlob.size) : '—'}</strong></div>
             </div>
 
             {isOptimizing && (
-              <div className="progress-block">
-                <div className="progress-label">
-                  <span>Procesando localmente</span>
-                  <strong>{Math.round(optimizationProgress * 100)}%</strong>
-                </div>
-                <div className="progress-track">
-                  <div className="progress-fill" style={{ width: `${optimizationProgress * 100}%` }} />
-                </div>
-                <small>No cierres esta pestaña hasta que termine.</small>
+              <div className="progress-block compact-progress">
+                <div className="progress-label"><span>Procesando</span><strong>{Math.round(optimizationProgress * 100)}%</strong></div>
+                <div className="progress-track"><div className="progress-fill" style={{ width: `${optimizationProgress * 100}%` }} /></div>
               </div>
             )}
 
-            <div className="stacked-actions">
-              <button
-                className="button button-primary"
-                onClick={optimizeRecording}
-                disabled={!recordingBlob || isOptimizing || status !== 'stopped'}
-              >
-                {isOptimizing ? 'Optimizando…' : mode === 'video' ? 'Optimizar a Full HD' : 'Optimizar audio'}
+            <div className="stacked-actions compact-actions">
+              <button className="button button-primary" onClick={optimizeRecording} disabled={!recordingBlob || isOptimizing || status !== 'stopped'}>
+                {isOptimizing ? 'Optimizando…' : mode === 'video' ? 'Optimizar Full HD' : 'Optimizar audio'}
               </button>
-
               <button
                 className="button button-secondary"
                 disabled={!recordingBlob || isOptimizing}
-                onClick={() =>
-                  downloadBlob(
-                    recordingBlob,
-                    timestampFilename(mode === 'video' ? 'video-original' : 'audio-original', originalExtension),
-                  )
-                }
+                onClick={() => downloadBlob(recordingBlob, timestampFilename(mode === 'video' ? 'video-original' : 'audio-original', originalExtension))}
               >
                 Descargar original
               </button>
-
               <button
                 className="button button-secondary"
                 disabled={!optimizedBlob || isOptimizing}
-                onClick={() =>
-                  downloadBlob(
-                    optimizedBlob,
-                    timestampFilename(
-                      mode === 'video' ? 'video-1080p-optimizado' : 'audio-optimizado',
-                      optimizedExtension,
-                    ),
-                  )
-                }
+                onClick={() => downloadBlob(optimizedBlob, timestampFilename(mode === 'video' ? 'video-1080p-optimizado' : 'audio-optimizado', optimizedExtension))}
               >
                 Descargar optimizado
               </button>
             </div>
 
             {optimizedUrl && mode === 'video' && (
-              <details className="optimized-preview">
-                <summary>Ver video optimizado</summary>
-                <video src={optimizedUrl} controls playsInline />
-              </details>
+              <details className="optimized-preview"><summary>Ver optimizado</summary><video src={optimizedUrl} controls playsInline /></details>
             )}
-
             {optimizedUrl && mode === 'audio' && (
-              <details className="optimized-preview">
-                <summary>Escuchar audio optimizado</summary>
-                <audio src={optimizedUrl} controls />
-              </details>
+              <details className="optimized-preview"><summary>Escuchar optimizado</summary><audio src={optimizedUrl} controls /></details>
             )}
           </section>
 
           {recoveryMeta && status !== 'recording' && status !== 'paused' && !recordingBlob && (
-            <section className="recovery-card">
-              <div>
-                <strong>Grabación local encontrada</strong>
-                <span>Puedes recuperar los fragmentos guardados en este navegador.</span>
-              </div>
-              <button className="button button-secondary" onClick={recoverRecording}>
-                Recuperar
-              </button>
+            <section className="recovery-card compact-recovery">
+              <div><strong>Grabación encontrada</strong><span>Hay fragmentos locales recuperables.</span></div>
+              <button className="button button-secondary" onClick={recoverRecording}>Recuperar</button>
             </section>
           )}
         </aside>
@@ -868,9 +821,7 @@ export default function App() {
       {(error || notice) && (
         <div className={`toast ${error ? 'toast-error' : 'toast-success'}`} role="status">
           <span>{error || notice}</span>
-          <button onClick={() => (error ? setError('') : setNotice(''))} aria-label="Cerrar mensaje">
-            ×
-          </button>
+          <button onClick={() => (error ? setError('') : setNotice(''))} aria-label="Cerrar mensaje">×</button>
         </div>
       )}
     </div>
