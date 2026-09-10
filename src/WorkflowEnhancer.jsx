@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getActiveProject, getProjectTakes } from './storage';
+import { getActiveProject, getProjectTakes, saveProject } from './storage';
 import { getVisualCountsBySlide } from './visualStore';
 
 const NAV_KEYS = ['content', 'recording', 'cut', 'library', 'join', 'memes', 'result'];
+const INHERIT = '__inherit__';
+const NONE = '__none__';
 
 function detectView() {
   if (document.querySelector('.content-flow')) return 'content';
@@ -21,11 +23,23 @@ function clickNav(key) {
   document.querySelectorAll('.production-nav button')[index]?.click();
 }
 
+function resolveChoice(value, fallback = '') {
+  if (value === NONE) return '';
+  if (!value || value === INHERIT) return fallback || '';
+  return value;
+}
+
+function isActiveCta(cta = '') {
+  const normalized = String(cta).toUpperCase();
+  return !!normalized && !/TIPO\s*:\s*NINGUNO/.test(normalized) && normalized.trim() !== 'NINGUNO';
+}
+
 export default function WorkflowEnhancer() {
   const [project, setProject] = useState(null);
   const [takes, setTakes] = useState([]);
   const [visualCounts, setVisualCounts] = useState({});
   const [view, setView] = useState('');
+  const [bridgeNotice, setBridgeNotice] = useState(null);
 
   async function refreshData() {
     const active = await getActiveProject();
@@ -117,10 +131,123 @@ export default function WorkflowEnhancer() {
     document.querySelectorAll('.join-scene-list button').forEach((button) => {
       const slideNumber = Number(button.querySelector(':scope > span')?.textContent || 0);
       const count = visualCounts[slideNumber] || 0;
+      const slide = stats.slides.find((item) => Number(item.number) === slideNumber);
+      const ready = Boolean(project?.productionPlan?.scenes?.[slideNumber]?.ready);
       button.dataset.visualCount = count ? `${count} img` : 'sin img';
       button.dataset.hasUploadedVisual = count ? 'true' : 'false';
+      button.classList.toggle('workflow-done', ready);
+      const small = button.querySelector('small');
+      if (small) {
+        const cleanLabel = stats.takeMap[slideNumber]?.cleanedBlob ? 'Video limpio ✓' : 'Falta corte';
+        const visualLabel = count
+          ? `Visual ${count} img ✓`
+          : String(slide?.visual || '').trim() ? 'Visual ✓' : 'Visual —';
+        small.textContent = `${cleanLabel} · ${visualLabel}`;
+      }
     });
   }, [project, stats, visualCounts, view]);
+
+  useEffect(() => {
+    if (view !== 'result') return;
+    const cards = [...document.querySelectorAll('.result-cards > div')];
+    const values = [
+      `${stats.accepted}/${stats.total}`,
+      `${stats.cleaned}/${stats.total}`,
+      `${stats.mounted}/${stats.total}`,
+    ];
+    values.forEach((value, index) => {
+      const target = cards[index]?.querySelector('strong');
+      if (target) target.textContent = value;
+      cards[index]?.classList.toggle('ok', Number(value.split('/')[0]) === stats.total);
+    });
+
+    const actualMissingVisuals = Math.max(0, stats.total - stats.visuals);
+    const audit = document.querySelector('.audit-issues');
+    if (audit) {
+      const spans = [...audit.querySelectorAll('span')];
+      spans.forEach((span) => {
+        if (!span.textContent.includes('diapositivas no tienen VISUAL')) return;
+        if (!actualMissingVisuals) span.style.display = 'none';
+        else {
+          span.style.display = '';
+          span.textContent = `${actualMissingVisuals} diapositivas no tienen imagen o VISUAL.`;
+        }
+      });
+      const visibleIssues = spans.filter((span) => span.style.display !== 'none');
+      audit.style.display = visibleIssues.length ? '' : 'none';
+    }
+  }, [view, stats]);
+
+  useEffect(() => {
+    if (view !== 'join' || !project) return undefined;
+
+    const interceptReady = async (event) => {
+      const button = event.target?.closest?.('.join-inspector .primary-button');
+      if (!button || !button.textContent.includes('Marcar escena lista')) return;
+
+      const slideNumber = Number(document.querySelector('.join-scene-list button.active > span')?.textContent || 0);
+      const slide = project.slides?.find((item) => Number(item.number) === slideNumber);
+      const uploadedCount = visualCounts[slideNumber] || 0;
+      if (!slide || !uploadedCount || String(slide.visual || '').trim()) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+
+      const take = stats.takeMap[slideNumber];
+      if (!take?.cleanedBlob) {
+        setBridgeNotice({ type: 'error', text: 'Primero guarda el corte limpio de esta diapositiva.' });
+        return;
+      }
+
+      try {
+        const defaults = await window.videosStudio?.library?.getDefaults?.() || {};
+        const selects = [...document.querySelectorAll('.join-inspector select')];
+        const defaultTransition = resolveChoice(project.productionPlan?.transitionDefault, defaults.transitions || '');
+        const transition = resolveChoice(selects[0]?.value, defaultTransition);
+        let ctaAsset = '';
+        if (isActiveCta(slide.cta)) {
+          ctaAsset = resolveChoice(selects[1]?.value, defaults.cta || '');
+          if (!ctaAsset) {
+            setBridgeNotice({ type: 'error', text: 'Esta diapositiva tiene CTA. Selecciona el video CTA antes de marcarla como lista.' });
+            return;
+          }
+        }
+
+        const scenes = {
+          ...(project.productionPlan?.scenes || {}),
+          [slideNumber]: {
+            ready: true,
+            visual: `IMÁGENES CARGADAS: ${uploadedCount}`,
+            visualImages: uploadedCount,
+            transition,
+            ctaAsset,
+            updatedAt: Date.now(),
+          },
+        };
+        const nextProject = {
+          ...project,
+          productionPlan: { ...(project.productionPlan || {}), scenes },
+          updatedAt: Date.now(),
+        };
+        await saveProject(nextProject);
+        setProject(nextProject);
+        setBridgeNotice({ type: 'success', text: `Diapositiva ${slideNumber} lista con ${uploadedCount} imagen${uploadedCount === 1 ? '' : 'es'} automática${uploadedCount === 1 ? '' : 's'}.` });
+        window.dispatchEvent(new CustomEvent('videosstudio:project-plan-changed'));
+
+        const sceneButtons = [...document.querySelectorAll('.join-scene-list button')];
+        const currentIndex = sceneButtons.findIndex((row) => Number(row.querySelector(':scope > span')?.textContent || 0) === slideNumber);
+        if (currentIndex >= 0 && currentIndex < sceneButtons.length - 1) {
+          window.setTimeout(() => sceneButtons[currentIndex + 1]?.click(), 80);
+        }
+      } catch (caught) {
+        setBridgeNotice({ type: 'error', text: caught.message || 'No se pudo marcar la escena como lista.' });
+      }
+    };
+
+    document.addEventListener('click', interceptReady, true);
+    return () => document.removeEventListener('click', interceptReady, true);
+  }, [view, project, visualCounts, stats.takeMap]);
 
   const recommendation = useMemo(() => {
     if (!project || !stats.total) return null;
@@ -169,6 +296,13 @@ export default function WorkflowEnhancer() {
           <div><span>Limpias</span><strong>{stats.cleaned}/{stats.total}</strong></div>
           <div><span>Con visual</span><strong>{stats.visuals}/{stats.total}</strong></div>
           <div><span>Montadas</span><strong>{stats.mounted}/{stats.total}</strong></div>
+        </div>
+      )}
+
+      {bridgeNotice && (
+        <div className={`workflow-bridge-toast ${bridgeNotice.type}`}>
+          <span>{bridgeNotice.text}</span>
+          <button onClick={() => setBridgeNotice(null)}>×</button>
         </div>
       )}
     </>
