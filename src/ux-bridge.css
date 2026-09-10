@@ -1,0 +1,54 @@
+.join-scene-list button.workflow-done {
+  background: linear-gradient(90deg, #effaf4, #fbfefc) !important;
+  box-shadow: inset 3px 0 0 var(--vs-success) !important;
+}
+
+.join-scene-list button.workflow-done::before {
+  content: '✓';
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  z-index: 1;
+  color: var(--vs-success);
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.workflow-bridge-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 150;
+  width: min(430px, calc(100vw - 32px));
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  box-shadow: 0 14px 36px rgba(16, 32, 51, .16);
+  font-size: 9px;
+}
+
+.workflow-bridge-toast.success {
+  border: 1px solid #bce7d0;
+  background: #f1fbf5;
+  color: #176d3b;
+}
+
+.workflow-bridge-toast.error {
+  border: 1px solid #f1c4cb;
+  background: #fff3f5;
+  color: #a62d3d;
+}
+
+.workflow-bridge-toast button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 16px;
+}
