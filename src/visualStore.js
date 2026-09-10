@@ -148,14 +148,23 @@ export async function pruneVisualAssets(projectId, validSlideNumbers = []) {
   if (!projectId) return 0;
   const valid = new Set(validSlideNumbers.map(Number));
   const db = await openVisualDb();
-  const readTx = db.transaction(ASSETS_STORE, 'readonly');
-  const rows = (await requestValue(readTx.objectStore(ASSETS_STORE).index('by_project').getAll(projectId))) || [];
-  await transactionDone(readTx);
-  const stale = rows.filter((row) => !valid.has(Number(row.slideNumber)));
-  if (!stale.length) return 0;
 
-  const writeTx = db.transaction(ASSETS_STORE, 'readwrite');
-  stale.forEach((row) => writeTx.objectStore(ASSETS_STORE).delete(row.id));
+  const readTx = db.transaction([ASSETS_STORE, SETTINGS_STORE], 'readonly');
+  const assetRows = (await requestValue(readTx.objectStore(ASSETS_STORE).index('by_project').getAll(projectId))) || [];
+  const settingRows = (await requestValue(readTx.objectStore(SETTINGS_STORE).getAll())) || [];
+  await transactionDone(readTx);
+
+  const staleAssets = assetRows.filter((row) => !valid.has(Number(row.slideNumber)));
+  const staleSettings = settingRows.filter(
+    (row) => row?.projectId === projectId && !valid.has(Number(row.slideNumber)),
+  );
+  if (!staleAssets.length && !staleSettings.length) return 0;
+
+  const writeTx = db.transaction([ASSETS_STORE, SETTINGS_STORE], 'readwrite');
+  const assetStore = writeTx.objectStore(ASSETS_STORE);
+  const settingsStore = writeTx.objectStore(SETTINGS_STORE);
+  staleAssets.forEach((row) => assetStore.delete(row.id));
+  staleSettings.forEach((row) => settingsStore.delete(row.key));
   await transactionDone(writeTx);
-  return stale.length;
+  return staleAssets.length + staleSettings.length;
 }
