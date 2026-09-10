@@ -96,7 +96,7 @@ export default function WorkflowEnhancer() {
     const accepted = slides.filter((slide) => takeMap[slide.number]?.accepted).length;
     const cleaned = slides.filter((slide) => takeMap[slide.number]?.cleanedBlob).length;
     const mounted = slides.filter((slide) => project?.productionPlan?.scenes?.[slide.number]?.ready).length;
-    const visuals = slides.filter((slide) => (visualCounts[slide.number] || 0) > 0 || String(slide.visual || '').trim()).length;
+    const visuals = slides.filter((slide) => (visualCounts[slide.number] || 0) > 0).length;
     const memes = project?.productionPlan?.memes?.length || 0;
     const denominator = total ? 1 + total * 4 : 1;
     const completedUnits = project ? 1 + accepted + cleaned + visuals + mounted : 0;
@@ -131,7 +131,6 @@ export default function WorkflowEnhancer() {
     document.querySelectorAll('.join-scene-list button').forEach((button) => {
       const slideNumber = Number(button.querySelector(':scope > span')?.textContent || 0);
       const count = visualCounts[slideNumber] || 0;
-      const slide = stats.slides.find((item) => Number(item.number) === slideNumber);
       const ready = Boolean(project?.productionPlan?.scenes?.[slideNumber]?.ready);
       button.dataset.visualCount = count ? `${count} img` : 'sin img';
       button.dataset.hasUploadedVisual = count ? 'true' : 'false';
@@ -139,9 +138,7 @@ export default function WorkflowEnhancer() {
       const small = button.querySelector('small');
       if (small) {
         const cleanLabel = stats.takeMap[slideNumber]?.cleanedBlob ? 'Video limpio ✓' : 'Falta corte';
-        const visualLabel = count
-          ? `Visual ${count} img ✓`
-          : String(slide?.visual || '').trim() ? 'Visual ✓' : 'Visual —';
+        const visualLabel = count ? `Visual ${count} img ✓` : 'Falta imagen';
         small.textContent = `${cleanLabel} · ${visualLabel}`;
       }
     });
@@ -170,7 +167,7 @@ export default function WorkflowEnhancer() {
         if (!actualMissingVisuals) span.style.display = 'none';
         else {
           span.style.display = '';
-          span.textContent = `${actualMissingVisuals} diapositivas no tienen imagen o VISUAL.`;
+          span.textContent = `${actualMissingVisuals} diapositivas todavía no tienen imágenes cargadas.`;
         }
       });
       const visibleIssues = spans.filter((span) => span.style.display !== 'none');
@@ -187,12 +184,17 @@ export default function WorkflowEnhancer() {
 
       const slideNumber = Number(document.querySelector('.join-scene-list button.active > span')?.textContent || 0);
       const slide = project.slides?.find((item) => Number(item.number) === slideNumber);
-      const uploadedCount = visualCounts[slideNumber] || 0;
-      if (!slide || !uploadedCount || String(slide.visual || '').trim()) return;
+      if (!slide) return;
 
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation?.();
+
+      const uploadedCount = visualCounts[slideNumber] || 0;
+      if (!uploadedCount) {
+        setBridgeNotice({ type: 'error', text: 'Agrega al menos una imagen a esta diapositiva antes de marcarla como lista.' });
+        return;
+      }
 
       const take = stats.takeMap[slideNumber];
       if (!take?.cleanedBlob) {
@@ -253,7 +255,7 @@ export default function WorkflowEnhancer() {
     if (!project || !stats.total) return null;
     if (stats.accepted < stats.total) return { key: 'recording', label: `${stats.total - stats.accepted} por grabar` };
     if (stats.cleaned < stats.total) return { key: 'cut', label: `${stats.total - stats.cleaned} por limpiar` };
-    if (stats.visuals < stats.total) return { key: 'join', label: `${stats.total - stats.visuals} sin visual` };
+    if (stats.visuals < stats.total) return { key: 'join', label: `${stats.total - stats.visuals} sin imagen` };
     if (stats.mounted < stats.total) return { key: 'join', label: `${stats.total - stats.mounted} por montar` };
     return { key: 'result', label: 'Revisar resultado' };
   }, [project, stats]);
@@ -268,7 +270,7 @@ export default function WorkflowEnhancer() {
     if (view === 'join') {
       const index = stats.slides.findIndex((slide) => {
         const hasClean = Boolean(stats.takeMap[slide.number]?.cleanedBlob);
-        const hasVisual = (visualCounts[slide.number] || 0) > 0 || String(slide.visual || '').trim();
+        const hasVisual = (visualCounts[slide.number] || 0) > 0;
         const mounted = Boolean(project.productionPlan?.scenes?.[slide.number]?.ready);
         return hasClean && (!hasVisual || !mounted);
       });
@@ -284,7 +286,7 @@ export default function WorkflowEnhancer() {
 
   return (
     <>
-      <div className="workflow-overall-pill" title="Progreso global: contenido + grabación + corte + visuales + montaje">
+      <div className="workflow-overall-pill" title="Progreso global: contenido + grabación + corte + imágenes + montaje">
         <span className="workflow-ring" style={{ '--value': `${stats.overall * 3.6}deg` }}><b>{stats.overall}%</b></span>
         <span><small>Proyecto</small><strong>{recommendation?.label || 'En progreso'}</strong></span>
         {showNext && <button onClick={goNextPending}>Siguiente pendiente →</button>}
@@ -294,7 +296,7 @@ export default function WorkflowEnhancer() {
         <div className="workflow-result-summary">
           <div><span>Grabadas</span><strong>{stats.accepted}/{stats.total}</strong></div>
           <div><span>Limpias</span><strong>{stats.cleaned}/{stats.total}</strong></div>
-          <div><span>Con visual</span><strong>{stats.visuals}/{stats.total}</strong></div>
+          <div><span>Con imagen</span><strong>{stats.visuals}/{stats.total}</strong></div>
           <div><span>Montadas</span><strong>{stats.mounted}/{stats.total}</strong></div>
         </div>
       )}
