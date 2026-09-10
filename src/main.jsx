@@ -9,5 +9,6 @@ import './audit.css';
 import './light-theme.css';
 import './ux-enhancements.css';
 import './ux-bridge.css';
+import './project-manager.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
