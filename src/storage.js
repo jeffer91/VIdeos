@@ -139,6 +139,14 @@ export async function getProject(projectId) {
   return value;
 }
 
+export async function listProjects() {
+  const db = await openDb();
+  const tx = db.transaction(PROJECTS_STORE, 'readonly');
+  const rows = (await requestValue(tx.objectStore(PROJECTS_STORE).getAll())) || [];
+  await transactionDone(tx);
+  return rows.sort((a, b) => (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0));
+}
+
 export async function getActiveProject() {
   const db = await openDb();
   const tx = db.transaction([META_STORE, PROJECTS_STORE], 'readonly');
