@@ -1,6 +1,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('videosStudio', {
+  clipboard: {
+    writeText: (text) => ipcRenderer.invoke('clipboard:write-text', text),
+  },
   library: {
     importMedia: (options) => ipcRenderer.invoke('library:import', options),
     listMedia: (options) => ipcRenderer.invoke('library:list', options),
