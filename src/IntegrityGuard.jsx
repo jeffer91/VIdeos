@@ -188,9 +188,12 @@ export default function IntegrityGuard() {
     const onVisualChange = () => scheduleAudit(250);
     const onFocus = () => scheduleAudit(150);
     const onClick = (event) => {
-      const text = event.target?.closest?.('button')?.textContent || '';
+      const button = event.target?.closest?.('button');
+      const text = button?.textContent || '';
       if (/Guardar corte limpio|Aceptar|Regrabar|Repetir|Recuperar toma|Marcar escena lista|Predeterminar/i.test(text)) {
         scheduleAudit(/Guardar corte limpio|Recuperar toma/i.test(text) ? 1800 : 700);
+      } else if (event.target?.closest?.('.template-drawer')) {
+        scheduleAudit(700);
       }
     };
     const onChange = (event) => {
