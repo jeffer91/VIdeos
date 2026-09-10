@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, session, ipcMain, dialog, shell, clipboard } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 
@@ -38,6 +38,22 @@ function configureMediaPermissions() {
 
     const requestingUrl = details?.requestingUrl || details?.securityOrigin || '';
     callback(isTrustedMediaRequest(webContents, requestingUrl));
+  });
+}
+
+function configureClipboardIpc() {
+  ipcMain.handle('clipboard:write-text', (event, value = '') => {
+    const senderUrl = event.senderFrame?.url || event.sender?.getURL?.() || '';
+    if (!isTrustedRendererOrigin(senderUrl)) throw new Error('Origen no autorizado para usar el portapapeles.');
+
+    const text = String(value ?? '');
+    if (!text.trim()) throw new Error('No hay texto para copiar.');
+    if (text.length > 1_000_000) throw new Error('El texto es demasiado grande para copiarlo.');
+
+    clipboard.writeText(text, 'clipboard');
+    const copied = clipboard.readText('clipboard');
+    if (copied !== text) throw new Error('No se pudo verificar el contenido copiado.');
+    return { ok: true, length: text.length };
   });
 }
 
@@ -310,6 +326,7 @@ async function createWindow() {
 app.whenReady().then(async () => {
   configureMediaPermissions();
   configureLibraryIpc();
+  configureClipboardIpc();
   rendererUrl = await startRenderer();
   await createWindow();
 
