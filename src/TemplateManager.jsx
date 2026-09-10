@@ -21,8 +21,8 @@ function clamp(value, min, max) {
 }
 
 function buildZones(dividerX = 0.56, dividerY = 0.47) {
-  const x = clamp(dividerX, 0.48, 0.68);
-  const y = clamp(dividerY, 0.32, 0.62);
+  const x = clamp(Number(dividerX) || 0.56, 0.48, 0.68);
+  const y = clamp(Number(dividerY) || 0.47, 0.32, 0.62);
   const rightX = clamp(x + 0.025, 0.51, 0.72);
   const rightWidth = clamp(0.94 - rightX, 0.20, 0.43);
 
@@ -136,7 +136,7 @@ function detectDividers(data, width, height) {
   };
 }
 
-async function analyzeTemplate(dataUrl, name) {
+async function analyzeTemplate(dataUrl, item) {
   const image = await loadImage(dataUrl);
   const sampleWidth = 320;
   const sampleHeight = 180;
@@ -144,6 +144,7 @@ async function analyzeTemplate(dataUrl, name) {
   canvas.width = sampleWidth;
   canvas.height = sampleHeight;
   const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) throw new Error('No se pudo abrir el analizador de imágenes.');
   context.drawImage(image, 0, 0, sampleWidth, sampleHeight);
   const pixels = context.getImageData(0, 0, sampleWidth, sampleHeight).data;
   const detected = detectDividers(pixels, sampleWidth, sampleHeight);
@@ -155,12 +156,14 @@ async function analyzeTemplate(dataUrl, name) {
     width: image.width,
     height: image.height,
     aspect16x9,
-    accent: detectAccent(pixels, name),
+    accent: detectAccent(pixels, item?.name || ''),
     layout: '3-zonas',
     dividerX: detected.dividerX,
     dividerY: detected.dividerY,
     zones: buildZones(detected.dividerX, detected.dividerY),
     confidence,
+    sourceSize: Number(item?.size) || 0,
+    sourceModifiedAt: Number(item?.modifiedAt) || 0,
     analyzedAt: Date.now(),
   };
 }
@@ -174,6 +177,53 @@ function confidenceLabel(value) {
   if (value === 'medium') return 'Media';
   if (value === 'manual') return 'Ajustada';
   return 'Baja';
+}
+
+function samePreferences(a, b) {
+  if ((a?.defaultPath || '') !== (b?.defaultPath || '')) return false;
+  const aEntries = Object.entries(a?.perSlide || {}).sort(([aKey], [bKey]) => String(aKey).localeCompare(String(bKey)));
+  const bEntries = Object.entries(b?.perSlide || {}).sort(([aKey], [bKey]) => String(aKey).localeCompare(String(bKey)));
+  return JSON.stringify(aEntries) === JSON.stringify(bEntries);
+}
+
+function prunePreferences(preferences, templates) {
+  const usablePaths = new Set(templates.filter((item) => item.metadata?.aspect16x9).map((item) => item.path));
+  return {
+    defaultPath: usablePaths.has(preferences?.defaultPath) ? preferences.defaultPath : '',
+    perSlide: Object.fromEntries(
+      Object.entries(preferences?.perSlide || {}).filter(([, path]) => usablePaths.has(path)),
+    ),
+  };
+}
+
+function ZoneGuides({ zones }) {
+  if (!zones) return null;
+  return (
+    <div className="template-zone-guides" aria-hidden="true">
+      {[
+        ['visual', 'VISUAL'],
+        ['data', 'DATOS'],
+        ['video', 'VIDEO'],
+      ].map(([key, label]) => {
+        const zone = zones[key];
+        if (!zone) return null;
+        return (
+          <span
+            key={key}
+            className={`template-zone-guide zone-${key}`}
+            style={{
+              left: percent(zone.x),
+              top: percent(zone.y),
+              width: percent(zone.w),
+              height: percent(zone.h),
+            }}
+          >
+            {label}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function TemplateManager() {
@@ -201,7 +251,10 @@ export default function TemplateManager() {
         const join = document.querySelector('.join-flow');
         const nextVisible = Boolean(join);
         setVisible(nextVisible);
-        if (!nextVisible) return;
+        if (!nextVisible) {
+          setActiveSlide(null);
+          return;
+        }
         const slideNumber = Number(document.querySelector('.join-scene-list button.active > span')?.textContent || 0);
         setActiveSlide(slideNumber || null);
       });
@@ -219,59 +272,66 @@ export default function TemplateManager() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!visible) return undefined;
-    let cancelled = false;
-    getActiveProject()
-      .then(async (activeProject) => {
-        if (cancelled) return;
-        setProject(activeProject);
-        if (!activeProject?.id) {
-          setPreferences({ defaultPath: '', perSlide: {} });
-          return;
-        }
-        const saved = await getTemplatePreferences(activeProject.id);
-        if (!cancelled) setPreferences(saved);
-      })
-      .catch((caught) => !cancelled && setError(caught.message || 'No se pudo leer el proyecto activo.'));
-    return () => {
-      cancelled = true;
-    };
-  }, [visible]);
-
   async function refreshTemplates() {
     const api = window.videosStudio?.library;
     if (!api?.listMedia || !api?.readDataUrl) {
-      setError('Las plantillas de fondo necesitan la aplicación de escritorio Electron.');
-      return;
+      throw new Error('Las plantillas de fondo necesitan la aplicación de escritorio Electron.');
     }
 
     const [items, savedMetadata] = await Promise.all([
       api.listMedia({ scope: 'global', category: TEMPLATE_CATEGORY }),
       getTemplateMetadataMap(),
     ]);
-    const nextMetadata = { ...savedMetadata };
 
-    const enriched = await Promise.all(
-      items.map(async (item) => {
-        const dataUrl = await api.readDataUrl({ path: item.path });
-        let metadata = nextMetadata[item.path];
-        if (!metadata) {
-          metadata = await analyzeTemplate(dataUrl, item.name);
-          nextMetadata[item.path] = metadata;
-        }
-        return { ...item, dataUrl, metadata };
-      }),
-    );
+    const nextMetadata = {};
+    const enriched = [];
+
+    for (const item of items) {
+      const dataUrl = await api.readDataUrl({ path: item.path });
+      let metadata = savedMetadata[item.path];
+      const sourceChanged = !metadata
+        || Number(metadata.sourceSize || 0) !== Number(item.size || 0)
+        || Number(metadata.sourceModifiedAt || 0) !== Number(item.modifiedAt || 0);
+      if (sourceChanged) metadata = await analyzeTemplate(dataUrl, item);
+      nextMetadata[item.path] = metadata;
+      enriched.push({ ...item, dataUrl, metadata });
+    }
 
     setMetadataMap(nextMetadata);
     setTemplates(enriched);
     await setTemplateMetadataMap(nextMetadata);
+    return enriched;
   }
 
   useEffect(() => {
-    if (!visible) return;
-    refreshTemplates().catch((caught) => setError(caught.message || 'No se pudieron cargar las plantillas.'));
+    if (!visible) return undefined;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        setError('');
+        const activeProject = await getActiveProject();
+        if (cancelled) return;
+        setProject(activeProject);
+        const savedPreferences = activeProject?.id
+          ? await getTemplatePreferences(activeProject.id)
+          : { defaultPath: '', perSlide: {} };
+        if (cancelled) return;
+        const loadedTemplates = await refreshTemplates();
+        if (cancelled) return;
+        const cleanedPreferences = prunePreferences(savedPreferences, loadedTemplates);
+        setPreferences(cleanedPreferences);
+        if (activeProject?.id && !samePreferences(savedPreferences, cleanedPreferences)) {
+          await setTemplatePreferences(activeProject.id, cleanedPreferences);
+        }
+      } catch (caught) {
+        if (!cancelled) setError(caught.message || 'No se pudieron cargar las plantillas.');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [visible]);
 
   const effectivePath = useMemo(() => {
@@ -291,11 +351,14 @@ export default function TemplateManager() {
 
   useEffect(() => {
     const composer = document.querySelector('.scene-composer');
-    if (!visible || !composer || !selectedTemplate?.dataUrl || !selectedTemplate.metadata?.zones) {
+    const usableTemplate = selectedTemplate?.metadata?.aspect16x9 && selectedTemplate?.metadata?.zones;
+
+    if (!visible || !composer || !selectedTemplate?.dataUrl || !usableTemplate) {
       if (composer) {
         composer.classList.remove('template-active');
-        composer.style.removeProperty('--template-image');
         composer.style.backgroundImage = '';
+        composer.removeAttribute('data-template-name');
+        composer.removeAttribute('data-template-confidence');
       }
       return;
     }
@@ -303,6 +366,8 @@ export default function TemplateManager() {
     const { zones } = selectedTemplate.metadata;
     composer.classList.add('template-active');
     composer.style.backgroundImage = `url(${JSON.stringify(selectedTemplate.dataUrl)})`;
+    composer.dataset.templateName = selectedTemplate.name;
+    composer.dataset.templateConfidence = selectedTemplate.metadata.confidence || 'low';
     for (const [zoneName, zone] of Object.entries(zones)) {
       composer.style.setProperty(`--${zoneName}-x`, percent(zone.x));
       composer.style.setProperty(`--${zoneName}-y`, percent(zone.y));
@@ -316,17 +381,33 @@ export default function TemplateManager() {
     if (project?.id) await setTemplatePreferences(project.id, next);
   }
 
-  async function selectDefault(path) {
-    await persistPreferences({ ...preferences, defaultPath: path });
+  function ensureCompatible(item) {
+    if (!item?.metadata?.aspect16x9) {
+      setError('Este fondo no es 16:9. Corrige la proporción antes de usarlo para evitar deformaciones.');
+      setNotice('');
+      return false;
+    }
+    return true;
+  }
+
+  async function selectDefault(item) {
+    if (!ensureCompatible(item)) return;
+    await persistPreferences({ ...preferences, defaultPath: item.path });
+    setError('');
     setNotice('Plantilla predeterminada actualizada.');
   }
 
-  async function selectForSlide(path) {
-    if (!activeSlide) return;
+  async function selectForSlide(item) {
+    if (!activeSlide) {
+      setError('Selecciona primero una diapositiva en Unión.');
+      return;
+    }
+    if (!ensureCompatible(item)) return;
     await persistPreferences({
       ...preferences,
-      perSlide: { ...preferences.perSlide, [activeSlide]: path },
+      perSlide: { ...preferences.perSlide, [activeSlide]: item.path },
     });
+    setError('');
     setNotice(`Plantilla asignada a la diapositiva ${activeSlide}.`);
   }
 
@@ -335,6 +416,7 @@ export default function TemplateManager() {
     const perSlide = { ...preferences.perSlide };
     delete perSlide[activeSlide];
     await persistPreferences({ ...preferences, perSlide });
+    setError('');
     setNotice(`La diapositiva ${activeSlide} vuelve a usar el fondo predeterminado.`);
   }
 
@@ -343,13 +425,19 @@ export default function TemplateManager() {
     if (!api?.importMedia) return setError('No se puede abrir el selector de archivos.');
     setBusy(true);
     setError('');
+    setNotice('');
     try {
       const imported = await api.importMedia({ scope: 'global', category: TEMPLATE_CATEGORY });
-      if (imported?.length) {
-        setNotice(`${imported.length} fondo${imported.length === 1 ? '' : 's'} agregado${imported.length === 1 ? '' : 's'} y analizado${imported.length === 1 ? '' : 's'}.`);
-        await refreshTemplates();
-        setDrawerOpen(true);
-      }
+      if (!imported?.length) return;
+      const loaded = await refreshTemplates();
+      const importedPaths = new Set(imported.map((item) => item.path));
+      const invalidCount = loaded.filter((item) => importedPaths.has(item.path) && !item.metadata?.aspect16x9).length;
+      setNotice(
+        invalidCount
+          ? `${imported.length} fondo${imported.length === 1 ? '' : 's'} agregado${imported.length === 1 ? '' : 's'}. ${invalidCount} debe${invalidCount === 1 ? '' : 'n'} corregirse a 16:9 antes de usarse.`
+          : `${imported.length} fondo${imported.length === 1 ? '' : 's'} agregado${imported.length === 1 ? '' : 's'} y analizado${imported.length === 1 ? '' : 's'} automáticamente.`,
+      );
+      setDrawerOpen(true);
     } catch (caught) {
       setError(caught.message || 'No se pudieron importar los fondos.');
     } finally {
@@ -361,7 +449,7 @@ export default function TemplateManager() {
     setBusy(true);
     setError('');
     try {
-      const metadata = await analyzeTemplate(item.dataUrl, item.name);
+      const metadata = await analyzeTemplate(item.dataUrl, item);
       const nextMap = { ...metadataMap, [item.path]: metadata };
       setMetadataMap(nextMap);
       setTemplates((current) => current.map((row) => (row.path === item.path ? { ...row, metadata } : row)));
@@ -384,6 +472,7 @@ export default function TemplateManager() {
       dividerY,
       zones: buildZones(dividerX, dividerY),
       confidence: 'manual',
+      analyzedAt: Date.now(),
     };
     const nextMap = { ...metadataMap, [item.path]: metadata };
     setMetadataMap(nextMap);
@@ -394,6 +483,7 @@ export default function TemplateManager() {
   async function deleteTemplate(item) {
     if (!window.confirm(`¿Eliminar el fondo "${item.name}"?`)) return;
     const api = window.videosStudio?.library;
+    if (!api?.deleteMedia) return setError('No se puede eliminar este fondo fuera de Electron.');
     setBusy(true);
     setError('');
     try {
@@ -436,12 +526,12 @@ export default function TemplateManager() {
       </div>
 
       {drawerOpen && (
-        <aside className="template-drawer">
+        <aside className="template-drawer" aria-label="Fondos de escena">
           <div className="template-drawer-header">
             <div>
               <small>UNIÓN · FONDOS</small>
               <h2>Plantillas de escena</h2>
-              <p>Sube PNG, JPG o WEBP. Videos Studio identifica color y zonas automáticamente.</p>
+              <p>Sube PNG, JPG o WEBP. Videos Studio identifica color y las zonas Visual, Datos y Video automáticamente.</p>
             </div>
             <button className="template-close" onClick={() => setDrawerOpen(false)} aria-label="Cerrar">×</button>
           </div>
@@ -473,26 +563,42 @@ export default function TemplateManager() {
               const isThisSlide = activeSlide && preferences.perSlide?.[activeSlide] === item.path;
               const isEffective = effectivePath === item.path;
               const adjusting = adjustingPath === item.path;
+              const compatible = Boolean(meta.aspect16x9);
+
               return (
-                <article key={item.path} className={`template-card ${isEffective ? 'selected' : ''}`}>
-                  <button className="template-preview" onClick={() => selectForSlide(item.path)} title={`Usar en diapositiva ${activeSlide || ''}`}>
+                <article key={item.path} className={`template-card ${isEffective ? 'selected' : ''} ${compatible ? '' : 'incompatible'}`}>
+                  <button
+                    className="template-preview"
+                    onClick={() => selectForSlide(item)}
+                    title={compatible ? `Usar en diapositiva ${activeSlide || ''}` : 'Este fondo debe corregirse a 16:9'}
+                  >
                     <img src={item.dataUrl} alt={item.name} />
+                    {adjusting && <ZoneGuides zones={meta.zones} />}
                     {isEffective && <span className="template-selected-badge">EN USO</span>}
+                    {!compatible && <span className="template-incompatible-badge">NO 16:9</span>}
                   </button>
+
                   <div className="template-card-info">
                     <strong title={item.name}>{item.name}</strong>
                     <span>
-                      {meta.width || '?'}×{meta.height || '?'} · {meta.aspect16x9 ? '16:9' : 'Revisar proporción'} · {ACCENT_LABELS[meta.accent] || 'Otro'}
+                      {meta.width || '?'}×{meta.height || '?'} · {compatible ? '16:9 compatible' : 'Proporción no compatible'} · {ACCENT_LABELS[meta.accent] || 'Otro'}
                     </span>
                     <span>Layout {meta.layout || 'sin detectar'} · Confianza {confidenceLabel(meta.confidence)}</span>
                   </div>
+
                   <div className="template-card-actions">
-                    <button className={isDefault ? 'active' : ''} onClick={() => selectDefault(item.path)}>{isDefault ? '✓ Predeterminada' : 'Usar siempre'}</button>
-                    <button className={isThisSlide ? 'active' : ''} onClick={() => selectForSlide(item.path)}>{isThisSlide ? `✓ Diap. ${activeSlide}` : `Solo diap. ${activeSlide || '—'}`}</button>
-                    <button onClick={() => setAdjustingPath(adjusting ? '' : item.path)}>Ajustar</button>
+                    <button className={isDefault ? 'active' : ''} onClick={() => selectDefault(item)} disabled={!compatible}>
+                      {isDefault ? '✓ Predeterminada' : 'Usar siempre'}
+                    </button>
+                    <button className={isThisSlide ? 'active' : ''} onClick={() => selectForSlide(item)} disabled={!compatible || !activeSlide}>
+                      {isThisSlide ? `✓ Diap. ${activeSlide}` : `Solo diap. ${activeSlide || '—'}`}
+                    </button>
+                    <button onClick={() => setAdjustingPath(adjusting ? '' : item.path)}>Ajustar zonas</button>
                   </div>
+
                   {adjusting && (
                     <div className="template-adjustments">
+                      <div className="template-adjust-note">Las guías sobre la miniatura muestran exactamente dónde se montarán Visual, Datos y Video.</div>
                       <label>
                         <span>División vertical <b>{Math.round((meta.dividerX || 0.56) * 100)}%</b></span>
                         <input type="range" min="0.48" max="0.68" step="0.005" value={meta.dividerX || 0.56} onChange={(event) => adjustDivider(item, 'x', event.target.value)} />
@@ -512,7 +618,7 @@ export default function TemplateManager() {
             }) : (
               <div className="template-empty-state">
                 <strong>No hay fondos en esta categoría.</strong>
-                <span>Sube tus diseños 1920 × 1080 y se organizarán automáticamente.</span>
+                <span>Sube tus diseños 16:9 y se organizarán automáticamente.</span>
                 <button className="template-primary" onClick={uploadTemplates} disabled={busy}>Subir fondos</button>
               </div>
             )}
