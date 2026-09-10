@@ -6,6 +6,8 @@ const PROJECTS_STORE = 'projects';
 const TAKES_STORE = 'takes';
 const RECORDING_META_KEY = 'recording';
 const ACTIVE_PROJECT_KEY = 'active-project';
+const TEMPLATE_METADATA_KEY = 'template-metadata';
+const TEMPLATE_PREFERENCES_PREFIX = 'template-preferences:';
 
 let dbPromise;
 
@@ -65,6 +67,10 @@ function requestValue(request) {
 
 function takeKey(projectId, slideNumber) {
   return `${projectId}:${slideNumber}`;
+}
+
+function templatePreferencesKey(projectId) {
+  return `${TEMPLATE_PREFERENCES_PREFIX}${projectId}`;
 }
 
 export async function clearRecordingData() {
@@ -194,5 +200,53 @@ export async function deleteSlideTake(projectId, slideNumber) {
   const db = await openDb();
   const tx = db.transaction(TAKES_STORE, 'readwrite');
   tx.objectStore(TAKES_STORE).delete(takeKey(projectId, slideNumber));
+  await transactionDone(tx);
+}
+
+export async function getTemplateMetadataMap() {
+  const db = await openDb();
+  const tx = db.transaction(META_STORE, 'readonly');
+  const value = await requestValue(tx.objectStore(META_STORE).get(TEMPLATE_METADATA_KEY));
+  await transactionDone(tx);
+  return value?.metadata && typeof value.metadata === 'object' ? value.metadata : {};
+}
+
+export async function setTemplateMetadataMap(metadata = {}) {
+  const db = await openDb();
+  const tx = db.transaction(META_STORE, 'readwrite');
+  tx.objectStore(META_STORE).put({
+    key: TEMPLATE_METADATA_KEY,
+    metadata,
+    updatedAt: Date.now(),
+  });
+  await transactionDone(tx);
+}
+
+export async function getTemplatePreferences(projectId) {
+  if (!projectId) return { defaultPath: '', perSlide: {} };
+  const db = await openDb();
+  const tx = db.transaction(META_STORE, 'readonly');
+  const value = await requestValue(tx.objectStore(META_STORE).get(templatePreferencesKey(projectId)));
+  await transactionDone(tx);
+  return {
+    defaultPath: value?.preferences?.defaultPath || '',
+    perSlide: value?.preferences?.perSlide && typeof value.preferences.perSlide === 'object'
+      ? value.preferences.perSlide
+      : {},
+  };
+}
+
+export async function setTemplatePreferences(projectId, preferences = {}) {
+  if (!projectId) return;
+  const db = await openDb();
+  const tx = db.transaction(META_STORE, 'readwrite');
+  tx.objectStore(META_STORE).put({
+    key: templatePreferencesKey(projectId),
+    preferences: {
+      defaultPath: preferences.defaultPath || '',
+      perSlide: preferences.perSlide && typeof preferences.perSlide === 'object' ? preferences.perSlide : {},
+    },
+    updatedAt: Date.now(),
+  });
   await transactionDone(tx);
 }
