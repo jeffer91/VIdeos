@@ -155,6 +155,8 @@ const invalidVisual = parseSlides(validTemplate.replace('TIPO: IMAGEN\nDESCRIPCI
 assert(invalidVisual.warnings.some((message) => message.includes('TIPO de VISUAL no reconocido')), 'Debe detectarse un VISUAL no reconocido.');
 
 const production = await read('src/ProductionApp.jsx');
+const templateManager = await read('src/TemplateManager.jsx');
+const lightTheme = await read('src/light-theme.css');
 const mainProcess = await read('electron/main.cjs');
 const preload = await read('electron/preload.cjs');
 const gitignore = await read('.gitignore');
@@ -176,7 +178,29 @@ assert(production.includes('deleteSlideTake'), 'La actualización de contenido d
 assert(production.includes('Transición después de esta escena'), 'La transición debe modelarse como un clip después de una escena (modo A).');
 assert(production.includes('transiciones entre escenas'), 'Resultado debe describir transiciones entre escenas.');
 assert(production.includes('El video principal se congela; aparece el meme; al terminar, continúa exactamente donde estaba.'), 'La lógica de video memes debe conservar pausa + reanudación.');
-assert(production.includes('joinTake?.mode === \'audio\''), 'Unión debe distinguir tomas de audio y video.');
+assert(production.includes("joinTake?.mode === 'audio'"), 'Unión debe distinguir tomas de audio y video.');
+
+assert(mainProcess.includes("'templates'"), 'Electron debe reconocer la categoría templates.');
+assert(mainProcess.includes("extensions: ['png', 'jpg', 'jpeg', 'webp']"), 'Las plantillas deben limitarse a imágenes compatibles.');
+assert(mainProcess.includes("ipcMain.handle('library:read-data-url'"), 'Electron debe exponer lectura segura de imágenes de plantilla.');
+assert(preload.includes("readDataUrl: (options) => ipcRenderer.invoke('library:read-data-url', options)"), 'Preload debe conectar la lectura segura de plantillas.');
+
+assert(templateManager.includes("const TEMPLATE_CATEGORY = 'templates'"), 'Unión debe tener una categoría de fondos independiente.');
+assert(templateManager.includes('detectAccent'), 'Las plantillas deben clasificarse automáticamente por color.');
+assert(templateManager.includes('detectDividers'), 'Las plantillas deben detectar automáticamente sus divisiones.');
+assert(templateManager.includes('ZoneGuides'), 'El ajuste de plantillas debe mostrar guías de Visual, Datos y Video.');
+assert(templateManager.includes('aspect16x9'), 'Las plantillas deben validar la proporción 16:9.');
+assert(templateManager.includes('sourceModifiedAt'), 'La metadata debe reanalizarse cuando el archivo de fondo cambia.');
+assert(templateManager.includes('prunePreferences'), 'Las referencias a fondos eliminados o incompatibles deben limpiarse.');
+
+assert(lightTheme.includes('color-scheme: light'), 'La aplicación debe usar interfaz clara.');
+assert(lightTheme.includes('.join-flow .theme-switch'), 'Los antiguos temas de color deben quedar fuera de la interfaz de Unión.');
+assert(lightTheme.includes('.join-readonly p'), 'Los textos del inspector de Unión deben tener contraste en modo claro.');
+assert(lightTheme.includes('.internal-cut-editor'), 'El editor de cortes internos debe adaptarse al modo claro.');
+assert(lightTheme.includes('.result-cards > div'), 'Resultado debe adaptarse al modo claro.');
+assert(lightTheme.includes('.production-toast'), 'Los avisos deben adaptarse al modo claro.');
+assert(lightTheme.includes('.scene-composer.template-active'), 'Unión debe poder usar la imagen subida como lienzo 16:9.');
+assert(lightTheme.includes('padding: 0 !important;'), 'El lienzo de plantilla no debe deformarse por padding heredado.');
 
 const channels = [...preload.matchAll(/ipcRenderer\.invoke\('([^']+)'/g)].map((match) => match[1]);
 assert(channels.length > 0, 'Preload debe exponer canales IPC.');
@@ -184,7 +208,7 @@ for (const channel of channels) {
   assert(mainProcess.includes(`ipcMain.handle('${channel}'`), `Falta el handler IPC ${channel} en electron/main.cjs.`);
 }
 
-assert(gitignore.split(/\r?\n/).some((line) => line.trim() === 'library/'), 'La carpeta library/ debe estar ignorada por Git para evitar subir videos locales.');
+assert(gitignore.split(/\r?\n/).some((line) => line.trim() === 'library/'), 'La carpeta library/ debe estar ignorada por Git para evitar subir videos o fondos locales.');
 assert(packageJson.engines?.node === '>=22.12.0', 'package.json debe exigir Node >=22.12.0 para Electron 44.');
 
-console.log(`Auditoría OK · ${parsed.slides.length} diapositivas de prueba · ${channels.length} canales IPC conectados · ${navOrder.length} etapas verificadas.`);
+console.log(`Auditoría OK · ${parsed.slides.length} diapositivas · ${channels.length} canales IPC · ${navOrder.length} etapas · fondos 16:9 validados.`);
