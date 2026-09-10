@@ -13,7 +13,7 @@
     "start:web": "vite --host 127.0.0.1",
     "prebuild": "node scripts/copy-ffmpeg.mjs",
     "build": "vite build",
-    "audit": "node scripts/audit-workflow.mjs && node scripts/audit-project-lifecycle.mjs",
+    "audit": "node scripts/audit-workflow.mjs && node scripts/audit-project-lifecycle.mjs && node scripts/audit-clipboard.mjs",
     "test": "npm run audit",
     "preview": "vite preview --host 127.0.0.1",
     "postinstall": "node scripts/copy-ffmpeg.mjs"
