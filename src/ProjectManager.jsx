@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import {
   clearRecordingData,
   getActiveProject,
+  getChunks,
+  getRecordingMeta,
   listProjects,
   setActiveProject,
 } from './storage';
@@ -87,6 +89,21 @@ export default function ProjectManager() {
     return false;
   }
 
+  async function confirmDiscardRecovery() {
+    const meta = await getRecordingMeta();
+    if (!meta?.projectId || !meta?.slideNumber) return true;
+    const chunks = await getChunks();
+    if (!chunks.length) return true;
+
+    const sameActiveProject = activeProject?.id && activeProject.id === meta.projectId;
+    const label = sameActiveProject
+      ? `la diapositiva ${meta.slideNumber} del proyecto actual`
+      : `la diapositiva ${meta.slideNumber} de otro proyecto`;
+    return window.confirm(
+      `Hay una grabación interrumpida recuperable de ${label}. Si cambias de proyecto ahora, esa recuperación se descartará. ¿Continuar de todos modos?`,
+    );
+  }
+
   async function changeProject({ projectId = '', mode = 'open', ask = true } = {}) {
     if (busy || !guardRecording()) return;
 
@@ -98,6 +115,14 @@ export default function ProjectManager() {
           ? 'El proyecto actual quedará guardado. ¿Salir del proyecto y volver a la lista de proyectos?'
           : 'El proyecto actual quedará guardado. Los cambios de contenido que aún no hayas guardado se perderán. ¿Abrir otro proyecto?';
       if (!window.confirm(message)) return;
+    }
+
+    try {
+      if (!(await confirmDiscardRecovery())) return;
+    } catch (caught) {
+      console.error(caught);
+      setError('No se pudo comprobar si existe una grabación recuperable. Intenta nuevamente antes de cambiar de proyecto.');
+      return;
     }
 
     setBusy(true);
