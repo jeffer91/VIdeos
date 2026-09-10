@@ -240,7 +240,7 @@ assert(visualManager.includes('reorderVisualAssets'), 'La UI debe permitir reord
 assert(visualManager.includes("transition: 'fade'"), 'La transición visual por defecto debe ser suave.');
 assert(visualManager.includes('invalidateMountedScene'), 'Cambiar un visual debe invalidar el montaje previo.');
 
-assert(workflowEnhancer.includes('data-progress'), 'La navegación debe exponer progreso por etapa.');
+assert(workflowEnhancer.includes('dataset.progress'), 'La navegación debe exponer progreso por etapa.');
 assert(workflowEnhancer.includes('Siguiente pendiente'), 'Debe existir navegación guiada al siguiente pendiente.');
 assert(workflowEnhancer.includes('visualCounts'), 'El progreso debe considerar imágenes realmente cargadas.');
 assert(workflowEnhancer.includes('IMÁGENES CARGADAS'), 'El montaje debe aceptar visuales subidos aunque el guion no tenga VISUAL textual.');
