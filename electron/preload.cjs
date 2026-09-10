@@ -9,5 +9,6 @@ contextBridge.exposeInMainWorld('videosStudio', {
     getDefaults: () => ipcRenderer.invoke('library:get-defaults'),
     reveal: (options) => ipcRenderer.invoke('library:reveal', options),
     open: (options) => ipcRenderer.invoke('library:open', options),
+    readDataUrl: (options) => ipcRenderer.invoke('library:read-data-url', options),
   },
 });
