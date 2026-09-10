@@ -4,6 +4,7 @@ import VisualManager from './VisualManager';
 import WorkflowEnhancer from './WorkflowEnhancer';
 import ProjectManager from './ProjectManager';
 import ClipboardEnhancer from './ClipboardEnhancer';
+import IntegrityGuard from './IntegrityGuard';
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
       <WorkflowEnhancer />
       <ProjectManager />
       <ClipboardEnhancer />
+      <IntegrityGuard />
     </>
   );
 }
