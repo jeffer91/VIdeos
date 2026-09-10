@@ -6,7 +6,8 @@ let mainWindow = null;
 let viteServer = null;
 let rendererUrl = null;
 
-const LIBRARY_CATEGORIES = new Set(['intros', 'transitions', 'endings', 'cta', 'memes']);
+const LIBRARY_CATEGORIES = new Set(['intros', 'transitions', 'endings', 'cta', 'memes', 'templates']);
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 
 function isTrustedRendererOrigin(value = '') {
   return (
@@ -138,21 +139,31 @@ async function writeDefaults(value) {
   await fs.writeFile(path.join(libraryRoot(), 'defaults.json'), JSON.stringify(value, null, 2), 'utf8');
 }
 
+function imageMimeType(filePath) {
+  const extension = path.extname(filePath).toLowerCase();
+  if (extension === '.png') return 'image/png';
+  if (extension === '.webp') return 'image/webp';
+  if (extension === '.jpg' || extension === '.jpeg') return 'image/jpeg';
+  return '';
+}
+
 function configureLibraryIpc() {
   ipcMain.handle('library:import', async (_event, options = {}) => {
     const directory = libraryDirectory(options);
     await ensureDirectory(directory);
+    const importingTemplates = options.category === 'templates';
     const response = await dialog.showOpenDialog(mainWindow, {
-      title: 'Agregar video a la biblioteca',
+      title: importingTemplates ? 'Agregar fondos a Videos Studio' : 'Agregar video a la biblioteca',
       properties: ['openFile', 'multiSelections'],
-      filters: [
-        { name: 'Videos', extensions: ['mp4', 'webm', 'mov', 'm4v', 'avi', 'mkv'] },
-      ],
+      filters: importingTemplates
+        ? [{ name: 'Imágenes de fondo', extensions: ['png', 'jpg', 'jpeg', 'webp'] }]
+        : [{ name: 'Videos', extensions: ['mp4', 'webm', 'mov', 'm4v', 'avi', 'mkv'] }],
     });
     if (response.canceled) return [];
 
     const imported = [];
     for (const sourcePath of response.filePaths) {
+      if (importingTemplates && !IMAGE_EXTENSIONS.has(path.extname(sourcePath).toLowerCase())) continue;
       const destination = await uniqueDestination(directory, sourcePath);
       await fs.copyFile(sourcePath, destination);
       const stat = await fs.stat(destination);
@@ -207,6 +218,17 @@ function configureLibraryIpc() {
 
   ipcMain.handle('library:get-defaults', async () => readDefaults());
 
+  ipcMain.handle('library:read-data-url', async (_event, options = {}) => {
+    const target = path.resolve(String(options.path || ''));
+    if (!target || !isInside(libraryRoot(), target) || target === path.resolve(libraryRoot())) {
+      throw new Error('Archivo fuera de la biblioteca.');
+    }
+    const mimeType = imageMimeType(target);
+    if (!mimeType) throw new Error('El archivo solicitado no es una imagen compatible.');
+    const data = await fs.readFile(target);
+    return `data:${mimeType};base64,${data.toString('base64')}`;
+  });
+
   ipcMain.handle('library:reveal', async (_event, options = {}) => {
     const target = path.resolve(String(options.path || libraryRoot()));
     if (!isInside(libraryRoot(), target)) throw new Error('Ruta fuera de la biblioteca.');
@@ -251,7 +273,7 @@ async function createWindow() {
     minHeight: 680,
     show: false,
     autoHideMenuBar: true,
-    backgroundColor: '#0b0d10',
+    backgroundColor: '#F5F7FA',
     title: 'Videos Studio',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
