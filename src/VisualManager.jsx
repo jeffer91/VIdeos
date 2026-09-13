@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getActiveProject, getProjectTakes, saveProject } from './storage';
+import { getActiveProject, getSlideTake, saveProject } from './storage';
 import {
   addVisualFiles,
   deleteVisualAsset,
@@ -119,14 +119,14 @@ export default function VisualManager() {
     if (!active?.id) return;
     setProject(active);
     await pruneVisualAssets(active.id, (active.slides || []).map((slide) => slide.number));
-    const [rows, sceneSettings, takes] = await Promise.all([
+    const [rows, sceneSettings, sceneTake] = await Promise.all([
       listVisualAssets(active.id, slideNumber),
       getVisualSettings(active.id, slideNumber),
-      getProjectTakes(active.id),
+      getSlideTake(active.id, slideNumber),
     ]);
     setAssets(rows);
     setSettings(sceneSettings);
-    setTake(takes.find((row) => Number(row.slideNumber) === Number(slideNumber)) || null);
+    setTake(sceneTake || null);
   }
 
   useEffect(() => {
@@ -148,6 +148,11 @@ export default function VisualManager() {
     if (!visible) return undefined;
     let media = null;
     let interval = 0;
+    const sync = () => {
+      if (!media) return;
+      setMediaTime(Number.isFinite(media.currentTime) ? media.currentTime : 0);
+      if (Number.isFinite(media.duration) && media.duration > 0) setMediaDuration(media.duration);
+    };
     const bind = () => {
       const next = document.querySelector('.scene-presenter video, .scene-presenter audio');
       if (media === next) return;
@@ -159,11 +164,6 @@ export default function VisualManager() {
         ['timeupdate', 'seeked', 'loadedmetadata', 'durationchange', 'ended'].forEach((name) => media.addEventListener(name, sync));
         sync();
       }
-    };
-    const sync = () => {
-      if (!media) return;
-      setMediaTime(Number.isFinite(media.currentTime) ? media.currentTime : 0);
-      if (Number.isFinite(media.duration) && media.duration > 0) setMediaDuration(media.duration);
     };
     bind();
     interval = window.setInterval(() => {
