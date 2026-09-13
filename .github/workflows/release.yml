@@ -39,6 +39,9 @@ jobs:
           }
           npm version $version --no-git-tag-version
 
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Audit Videos Studio
         run: npm run audit
 
