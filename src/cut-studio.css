@@ -1,28 +1,87 @@
-/* Corte: editor visual con transporte persistente, onda y selección directa. */
-.cut-flow .cut-grid {
-  align-items: stretch;
+/* Corte compacto: una sola interfaz, sin scroll general y con edición visual. */
+.cut-flow {
+  min-height: 0 !important;
+  overflow: hidden !important;
+  gap: 6px !important;
 }
 
+.cut-flow .flow-heading {
+  min-height: 44px !important;
+  align-items: center !important;
+}
+
+.cut-flow .flow-heading h1 {
+  margin: 0 0 2px !important;
+  font-size: 18px !important;
+}
+
+.cut-flow .flow-heading p {
+  font-size: 9px !important;
+}
+
+.cut-flow .cut-grid {
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  grid-template-columns: 310px minmax(0, 1fr) !important;
+  align-items: stretch !important;
+  gap: 8px !important;
+}
+
+/* La lista es el único lugar que puede desplazarse verticalmente. */
+.cut-flow .cut-list {
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 3px !important;
+  scrollbar-width: thin;
+}
+
+.cut-flow .cut-list button {
+  min-height: 40px !important;
+  grid-template-columns: 31px minmax(0, 1fr) !important;
+  gap: 5px !important;
+  padding: 0 7px !important;
+}
+
+.cut-flow .cut-list button > span {
+  font-size: 12px !important;
+}
+
+.cut-flow .cut-list strong {
+  font-size: 9px !important;
+  line-height: 1.15 !important;
+}
+
+.cut-flow .cut-list small {
+  font-size: 7px !important;
+  line-height: 1.1 !important;
+}
+
+/* Derecha: video flexible arriba + editor visual compacto abajo. */
 .cut-flow .cut-editor {
   min-height: 0 !important;
-  overflow: auto !important;
+  height: 100% !important;
+  overflow: hidden !important;
   display: grid !important;
-  grid-template-rows: auto auto auto auto auto auto !important;
-  align-content: start !important;
-  gap: 9px !important;
-  padding: 10px !important;
+  grid-template-rows: minmax(150px, 1fr) auto !important;
+  align-content: stretch !important;
+  gap: 6px !important;
+  padding: 6px !important;
 }
 
 .cut-flow .cut-video {
   order: 0;
   width: 100%;
-  min-height: 260px;
-  max-height: 46vh;
-  aspect-ratio: 16 / 9;
+  height: 100%;
+  min-height: 0 !important;
+  max-height: none !important;
+  aspect-ratio: auto !important;
   display: grid;
   place-items: center;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 9px;
   background: #000000 !important;
 }
 
@@ -39,67 +98,76 @@
   background: #000000 !important;
 }
 
-.cut-flow .cut-studio-enhancer { order: 1; }
-.cut-flow .trim-controls { order: 2; }
-.cut-flow .internal-cut-editor { order: 3; }
-.cut-flow .cut-summary { order: 4; }
-.cut-flow .cut-editor > .primary-button { order: 5; display: none !important; }
+.cut-flow .cut-studio-enhancer {
+  order: 1;
+}
+
+/* El sistema anterior sigue en DOM para conservar la lógica, pero ya no duplica la interfaz. */
+.cut-flow .trim-controls,
+.cut-flow .internal-cut-editor,
+.cut-flow .cut-summary,
+.cut-flow .cut-editor > .primary-button {
+  display: none !important;
+}
 
 .cut-studio-enhancer {
-  display: grid;
-  gap: 8px;
   min-width: 0;
-  padding: 9px;
+  display: grid;
+  grid-template-rows: auto auto auto auto auto;
+  gap: 5px;
+  padding: 6px;
   border: 1px solid var(--vs-border, #d8e0e8);
-  border-radius: 11px;
+  border-radius: 9px;
   background: #fbfcfe;
 }
 
 .cut-transport {
+  min-height: 30px;
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) auto minmax(130px, 1fr);
+  grid-template-columns: minmax(135px, 1fr) auto minmax(108px, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 7px;
 }
 
 .cut-scene-name {
   min-width: 0;
   display: grid;
-  gap: 1px;
+  gap: 0;
 }
 
 .cut-scene-name span {
   color: #64748b;
-  font-size: 8px;
+  font-size: 7px;
   font-weight: 800;
-  letter-spacing: .08em;
+  letter-spacing: .07em;
 }
 
 .cut-scene-name strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 10px;
+  font-size: 9px;
 }
 
 .cut-transport-buttons {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .cut-transport-buttons button,
 .cut-quick-actions button,
 .silence-suggestions button {
-  min-height: 29px;
+  min-height: 26px;
   border: 1px solid #cfd9e3;
-  border-radius: 7px;
-  padding: 0 9px;
+  border-radius: 6px;
+  padding: 0 7px;
   background: #ffffff;
   color: #334155;
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .cut-transport-buttons button:hover,
@@ -110,7 +178,7 @@
 }
 
 .cut-play-button {
-  min-width: 82px;
+  min-width: 72px;
   border-color: #9bbcff !important;
   background: #eaf2ff !important;
   color: #1746a2 !important;
@@ -120,58 +188,61 @@
   display: flex;
   align-items: baseline;
   justify-content: flex-end;
-  gap: 5px;
+  gap: 4px;
+  min-width: 0;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .cut-time-readout strong {
-  font-size: 15px;
+  font-size: 13px;
 }
 
 .cut-time-readout span {
   color: #64748b;
-  font-size: 9px;
+  font-size: 8px;
 }
 
 .waveform-shell {
   min-width: 0;
   display: grid;
-  gap: 5px;
-  padding: 7px 8px 6px;
+  gap: 3px;
+  padding: 4px 6px;
   border: 1px solid #d8e0e8;
-  border-radius: 9px;
+  border-radius: 7px;
   background: #ffffff;
 }
 
 .cut-waveform {
   width: 100%;
-  height: 96px;
+  height: 68px;
   display: block;
   cursor: crosshair;
   touch-action: none;
-  border-radius: 6px;
+  border-radius: 5px;
   background: linear-gradient(180deg, #fbfdff, #f4f7fa);
 }
 
 .waveform-legend {
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-width: 0;
+  gap: 8px;
   color: #64748b;
-  font-size: 8px;
+  font-size: 7px;
+  line-height: 1;
 }
 
 .waveform-legend span {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   white-space: nowrap;
 }
 
 .waveform-legend i {
-  width: 10px;
-  height: 6px;
+  width: 8px;
+  height: 5px;
   display: inline-block;
   border-radius: 2px;
 }
@@ -179,12 +250,25 @@
 .legend-selection { background: rgba(37, 99, 235, .28); }
 .legend-cut { background: rgba(220, 38, 38, .28); }
 .legend-silence { background: rgba(245, 158, 11, .24); }
-.waveform-legend small { margin-left: auto; color: #7c8a99; }
+
+.waveform-legend small {
+  margin-left: auto;
+  overflow: hidden;
+  color: #7c8a99;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .cut-quick-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.cut-quick-actions button {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cut-quick-actions button.active {
@@ -194,88 +278,114 @@
 }
 
 .cut-quick-actions button:disabled {
-  opacity: .45;
+  opacity: .42;
 }
 
 .silence-suggestions {
+  min-width: 0;
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   color: #64748b;
-  font-size: 8px;
+  font-size: 7px;
 }
 
 .silence-suggestions > div {
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 4px;
-  min-width: 0;
-  overflow-x: auto;
-  padding-bottom: 1px;
+  gap: 3px;
+  overflow: hidden;
 }
 
 .silence-suggestions button {
-  min-height: 25px;
-  padding: 0 7px;
+  min-height: 22px;
   flex: 0 0 auto;
+  padding: 0 5px;
   border-color: #f2d49a;
   background: #fffaf0;
   color: #8a5a00;
-  font-size: 8px;
+  font-size: 7px;
+}
+
+.silence-suggestions small {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 7px;
 }
 
 .cut-enhancer-footer {
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
 .cut-enhancer-footer small {
+  min-width: 0;
+  overflow: hidden;
   color: #64748b;
-  font-size: 8px;
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cut-enhancer-footer .primary-button {
-  min-width: 150px;
-  min-height: 31px;
+  min-width: 142px;
+  min-height: 28px;
+  flex: 0 0 auto;
+  padding: 0 11px;
+  font-size: 8px;
 }
 
-.cut-flow .trim-controls {
-  padding-top: 1px;
-}
-
-.cut-flow .trim-track > div {
-  position: relative;
-}
-
-.cut-flow .internal-cut-editor {
-  padding: 8px !important;
-}
-
-@media (max-width: 1180px) {
+@media (max-width: 1360px) {
   .cut-flow .cut-grid {
-    grid-template-columns: 270px minmax(0, 1fr) !important;
+    grid-template-columns: 250px minmax(0, 1fr) !important;
   }
 
   .cut-transport {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(110px, 1fr) auto auto;
   }
 
-  .cut-scene-name,
-  .cut-time-readout {
-    justify-items: center;
-    justify-content: center;
-    text-align: center;
+  .cut-transport-buttons button {
+    padding-left: 5px;
+    padding-right: 5px;
   }
 
-  .waveform-legend {
-    flex-wrap: wrap;
+  .cut-quick-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .waveform-legend small {
-    width: 100%;
-    margin-left: 0;
+  .cut-waveform {
+    height: 58px;
+  }
+}
+
+@media (max-height: 760px) {
+  .cut-flow .flow-heading {
+    min-height: 36px !important;
+  }
+
+  .cut-flow .flow-heading h1 {
+    font-size: 16px !important;
+  }
+
+  .cut-flow .cut-list button {
+    min-height: 36px !important;
+  }
+
+  .cut-waveform {
+    height: 52px;
+  }
+
+  .cut-studio-enhancer {
+    gap: 4px;
+    padding: 5px;
+  }
+
+  .silence-suggestions button {
+    min-height: 20px;
   }
 }
