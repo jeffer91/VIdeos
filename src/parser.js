@@ -200,15 +200,6 @@ function wordCount(value = '') {
   return normalizeCommonText(value).trim().split(/\s+/).filter(Boolean).length;
 }
 
-function visualHasSupportingData(visual = '') {
-  const useful = normalizeCommonText(visual)
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter((line) => !/^TIPO\s*:/i.test(line) && !/^DESCRIPCI[ÓO]N\s*:/i.test(line));
-  return useful.length > 0;
-}
-
 function ctaMatchesReading(type, reading = '') {
   if (!type || type === 'NINGUNO') return true;
   const text = normalizeCommonText(reading).toLowerCase();
@@ -304,9 +295,6 @@ function finalizeSlide(current, slides, errors, warnings, corrections) {
   if (!visual) warnings.push(`Diapositiva ${current.number}: falta VISUAL. Usa al menos “TIPO: NINGUNO”.`);
   else if (!visualType) warnings.push(`Diapositiva ${current.number}: VISUAL no indica TIPO.`);
   else if (!VISUAL_TYPES.has(visualType)) warnings.push(`Diapositiva ${current.number}: TIPO de VISUAL no reconocido: ${visualType}.`);
-  else if (!['IMAGEN', 'NINGUNO'].includes(visualType) && !visualHasSupportingData(visual)) {
-    warnings.push(`Diapositiva ${current.number}: el VISUAL ${visualType} necesita datos para poder construirlo.`);
-  }
 
   if (!cta) warnings.push(`Diapositiva ${current.number}: falta CTA. Usa al menos “TIPO: NINGUNO”.`);
   else if (!ctaType) warnings.push(`Diapositiva ${current.number}: CTA no indica TIPO.`);
