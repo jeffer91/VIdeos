@@ -6,8 +6,15 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+function finiteDuration(value, fallback = 0) {
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && numeric > 0) return numeric;
+  const safeFallback = Number(fallback);
+  return Number.isFinite(safeFallback) && safeFallback > 0 ? safeFallback : 0;
+}
+
 function formatClock(seconds = 0) {
-  const safe = Math.max(0, Number(seconds) || 0);
+  const safe = finiteDuration(seconds, 0);
   const minutes = Math.floor(safe / 60);
   const whole = Math.floor(safe % 60);
   const tenths = Math.floor((safe % 1) * 10);
@@ -15,7 +22,8 @@ function formatClock(seconds = 0) {
 }
 
 function numberFromText(value = '') {
-  return Number(String(value).replace(',', '.')) || 0;
+  const numeric = Number(String(value).replace(',', '.'));
+  return Number.isFinite(numeric) ? numeric : 0;
 }
 
 function setNativeInputValue(input, value) {
@@ -27,11 +35,17 @@ function setNativeInputValue(input, value) {
   input.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
+function durationFromTarget(target) {
+  const trimInputs = target?.querySelectorAll('.trim-controls input');
+  return finiteDuration(numberFromText(trimInputs?.[1]?.value || 0), 0);
+}
+
 function readCutState(target, fallbackDuration = 0) {
-  if (!target) return { start: 0, end: fallbackDuration, ranges: [] };
+  const fallback = finiteDuration(fallbackDuration, durationFromTarget(target));
+  if (!target) return { start: 0, end: fallback, ranges: [] };
   const trimInputs = target.querySelectorAll('.trim-controls input');
-  const start = numberFromText(trimInputs[0]?.value || 0);
-  const end = numberFromText(trimInputs[1]?.value || fallbackDuration) || fallbackDuration;
+  const start = Math.max(0, numberFromText(trimInputs[0]?.value || 0));
+  const end = finiteDuration(numberFromText(trimInputs[1]?.value || 0), fallback);
   const ranges = [...target.querySelectorAll('.cut-range-list > span')]
     .map((node) => {
       const match = (node.textContent || '').match(/([\d.,]+)\s*[–-]\s*([\d.,]+)/);
@@ -64,7 +78,7 @@ function activeSlideLabel() {
 
 function buildWaveform(audioBuffer) {
   const data = audioBuffer.getChannelData(0);
-  const duration = audioBuffer.duration || 0;
+  const duration = finiteDuration(audioBuffer.duration, 0);
   const bins = 720;
   const step = Math.max(1, Math.floor(data.length / bins));
   const peaks = [];
@@ -87,7 +101,7 @@ function buildWaveform(audioBuffer) {
   }
 
   const normalized = peaks.map((value) => max > 0 ? value / max : 0);
-  const binDuration = duration / bins;
+  const binDuration = duration > 0 ? duration / bins : 0;
   const silences = [];
   let silenceStart = null;
 
@@ -102,6 +116,17 @@ function buildWaveform(audioBuffer) {
   });
 
   return { peaks: normalized, silences, duration };
+}
+
+function estimatedOutputDuration(state, duration) {
+  const end = finiteDuration(state.end, duration);
+  const start = Math.max(0, Number(state.start) || 0);
+  const removed = (state.ranges || []).reduce((sum, range) => {
+    const low = clamp(Number(range.start) || 0, start, end);
+    const high = clamp(Number(range.end) || 0, start, end);
+    return sum + Math.max(0, high - low);
+  }, 0);
+  return Math.max(0, end - start - removed);
 }
 
 export default function CutStudioEnhancer() {
@@ -151,17 +176,18 @@ export default function CutStudioEnhancer() {
     }
 
     media.controls = false;
+    const getDuration = () => finiteDuration(media.duration, durationFromTarget(target));
     const syncTime = () => {
-      setCurrentTime(Number(media.currentTime) || 0);
-      const nextDuration = Number.isFinite(media.duration) ? media.duration : 0;
+      setCurrentTime(Number.isFinite(media.currentTime) ? media.currentTime : 0);
+      const nextDuration = getDuration();
       if (nextDuration > 0) setDuration(nextDuration);
 
       if (previewRef.current) {
         const state = readCutState(target, nextDuration);
-        const current = Number(media.currentTime) || 0;
+        const current = Number.isFinite(media.currentTime) ? media.currentTime : 0;
         const removed = state.ranges.find((range) => current >= range.start && current < range.end - 0.01);
         if (removed) {
-          media.currentTime = Math.min(state.end, removed.end + 0.01);
+          media.currentTime = Math.min(state.end || nextDuration, removed.end + 0.01);
           return;
         }
         if (state.end > 0 && current >= state.end - 0.015) {
@@ -174,8 +200,9 @@ export default function CutStudioEnhancer() {
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
     const onLoaded = () => {
-      setDuration(Number(media.duration) || 0);
-      setCurrentTime(Number(media.currentTime) || 0);
+      const nextDuration = getDuration();
+      if (nextDuration > 0) setDuration(nextDuration);
+      setCurrentTime(Number.isFinite(media.currentTime) ? media.currentTime : 0);
     };
 
     media.addEventListener('timeupdate', syncTime);
@@ -198,8 +225,13 @@ export default function CutStudioEnhancer() {
 
   useEffect(() => {
     if (!target) return undefined;
-    const timer = window.setInterval(() => setTimeline(readCutState(target, duration)), 180);
-    setTimeline(readCutState(target, duration));
+    const syncTimeline = () => {
+      const fallback = finiteDuration(duration, durationFromTarget(target));
+      setTimeline(readCutState(target, fallback));
+      if (!duration && fallback > 0) setDuration(fallback);
+    };
+    const timer = window.setInterval(syncTimeline, 180);
+    syncTimeline();
     return () => window.clearInterval(timer);
   }, [target, duration]);
 
@@ -227,7 +259,7 @@ export default function CutStudioEnhancer() {
           const result = buildWaveform(decoded);
           setPeaks(result.peaks);
           setSilences(result.silences);
-          if (result.duration > 0) setDuration((old) => old || result.duration);
+          if (result.duration > 0) setDuration(result.duration);
           setWaveStatus('ready');
         } finally {
           context.close().catch(() => {});
@@ -238,12 +270,14 @@ export default function CutStudioEnhancer() {
           setPeaks([]);
           setSilences([]);
           setWaveStatus('error');
+          const fallback = durationFromTarget(target);
+          if (fallback > 0) setDuration(fallback);
         }
       }
     };
     load();
     return () => { cancelled = true; };
-  }, [src]);
+  }, [src, target]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -255,7 +289,8 @@ export default function CutStudioEnhancer() {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !duration) return;
+    const safeDuration = finiteDuration(duration, durationFromTarget(target));
+    if (!canvas || !safeDuration) return;
     const rect = canvas.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     const ratio = window.devicePixelRatio || 1;
@@ -268,7 +303,7 @@ export default function CutStudioEnhancer() {
     const width = rect.width;
     const height = rect.height;
     const middle = height / 2;
-    const xFor = (time) => clamp(time / duration, 0, 1) * width;
+    const xFor = (time) => clamp(time / safeDuration, 0, 1) * width;
 
     context.strokeStyle = '#d9e2ec';
     context.lineWidth = 1;
@@ -291,16 +326,16 @@ export default function CutStudioEnhancer() {
       });
     } else {
       context.fillStyle = '#94a3b8';
-      context.font = '12px system-ui, sans-serif';
+      context.font = '11px system-ui, sans-serif';
       context.textAlign = 'center';
-      context.fillText(waveStatus === 'loading' ? 'Analizando audio…' : 'La edición sigue disponible aunque no se pueda dibujar la onda.', width / 2, middle + 4);
+      context.fillText(waveStatus === 'loading' ? 'Analizando audio…' : 'Edición disponible sin onda.', width / 2, middle + 4);
     }
 
     if (timeline.start > 0) {
       context.fillStyle = 'rgba(100, 116, 139, .18)';
       context.fillRect(0, 0, xFor(timeline.start), height);
     }
-    if (timeline.end > 0 && timeline.end < duration) {
+    if (timeline.end > 0 && timeline.end < safeDuration) {
       context.fillStyle = 'rgba(100, 116, 139, .18)';
       context.fillRect(xFor(timeline.end), 0, width - xFor(timeline.end), height);
     }
@@ -326,7 +361,7 @@ export default function CutStudioEnhancer() {
     context.moveTo(xFor(currentTime), 0);
     context.lineTo(xFor(currentTime), height);
     context.stroke();
-  }, [peaks, silences, currentTime, duration, timeline, selection, waveStatus, resizeTick]);
+  }, [peaks, silences, currentTime, duration, timeline, selection, waveStatus, resizeTick, target]);
 
   useEffect(() => {
     if (!target) return undefined;
@@ -344,10 +379,12 @@ export default function CutStudioEnhancer() {
   }, [target, media]);
 
   const label = useMemo(() => activeSlideLabel(), [target, src]);
+  const safeDuration = finiteDuration(duration, durationFromTarget(target));
+  const outputDuration = estimatedOutputDuration(timeline, safeDuration);
 
   function seek(next) {
-    if (!media || !duration) return;
-    media.currentTime = clamp(next, 0, duration);
+    if (!media || !safeDuration) return;
+    media.currentTime = clamp(next, 0, safeDuration);
     setCurrentTime(media.currentTime);
   }
 
@@ -360,15 +397,15 @@ export default function CutStudioEnhancer() {
   }
 
   function previewCuts() {
-    if (!media || !duration) return;
+    if (!media || !safeDuration) return;
     if (previewRef.current) {
       media.pause();
       previewRef.current = false;
       setPreviewing(false);
       return;
     }
-    const state = readCutState(target, duration);
-    media.currentTime = clamp(state.start, 0, duration);
+    const state = readCutState(target, safeDuration);
+    media.currentTime = clamp(state.start, 0, safeDuration);
     previewRef.current = true;
     setPreviewing(true);
     media.play().catch(() => {
@@ -379,13 +416,13 @@ export default function CutStudioEnhancer() {
 
   function timeAtPointer(event) {
     const canvas = canvasRef.current;
-    if (!canvas || !duration) return 0;
+    if (!canvas || !safeDuration) return 0;
     const rect = canvas.getBoundingClientRect();
-    return clamp(((event.clientX - rect.left) / Math.max(1, rect.width)) * duration, 0, duration);
+    return clamp(((event.clientX - rect.left) / Math.max(1, rect.width)) * safeDuration, 0, safeDuration);
   }
 
   function onPointerDown(event) {
-    if (!duration) return;
+    if (!safeDuration) return;
     event.currentTarget.setPointerCapture?.(event.pointerId);
     const time = timeAtPointer(event);
     dragStartRef.current = time;
@@ -406,9 +443,9 @@ export default function CutStudioEnhancer() {
     const low = Math.min(start, end);
     const high = Math.max(start, end);
     if (high - low >= 0.03) {
-      const trim = readCutState(target, duration);
-      const safeStart = clamp(low, trim.start, trim.end || duration);
-      const safeEnd = clamp(high, trim.start, trim.end || duration);
+      const trim = readCutState(target, safeDuration);
+      const safeStart = clamp(low, trim.start, trim.end || safeDuration);
+      const safeEnd = clamp(high, trim.start, trim.end || safeDuration);
       setSelection({ start: safeStart, end: safeEnd });
       writeRangeInputs(target, safeStart, safeEnd);
     } else {
@@ -418,17 +455,17 @@ export default function CutStudioEnhancer() {
   }
 
   function markStart() {
-    const state = readCutState(target, duration);
-    const value = clamp(currentTime, 0, Math.max(0, (state.end || duration) - 0.05));
+    const state = readCutState(target, safeDuration);
+    const value = clamp(currentTime, 0, Math.max(0, (state.end || safeDuration) - 0.05));
     writeTrimInput(target, 'start', value);
-    setTimeline(readCutState(target, duration));
+    setTimeline(readCutState(target, safeDuration));
   }
 
   function markEnd() {
-    const state = readCutState(target, duration);
-    const value = clamp(currentTime, Math.min(duration, state.start + 0.05), duration);
+    const state = readCutState(target, safeDuration);
+    const value = clamp(currentTime, Math.min(safeDuration, state.start + 0.05), safeDuration);
     writeTrimInput(target, 'end', value);
-    setTimeline(readCutState(target, duration));
+    setTimeline(readCutState(target, safeDuration));
   }
 
   function deleteSelection() {
@@ -449,9 +486,9 @@ export default function CutStudioEnhancer() {
   }
 
   function restoreOriginal() {
-    if (!target || !duration) return;
+    if (!target || !safeDuration) return;
     writeTrimInput(target, 'start', 0);
-    writeTrimInput(target, 'end', duration);
+    writeTrimInput(target, 'end', safeDuration);
     setSelection(null);
     const buttons = [...target.querySelectorAll('.cut-range-list > span button')];
     for (let index = buttons.length - 1; index >= 0; index -= 1) buttons[index].click();
@@ -459,9 +496,9 @@ export default function CutStudioEnhancer() {
   }
 
   function chooseSilence(range) {
-    const state = readCutState(target, duration);
-    const start = clamp(range.start, state.start, state.end || duration);
-    const end = clamp(range.end, state.start, state.end || duration);
+    const state = readCutState(target, safeDuration);
+    const start = clamp(range.start, state.start, state.end || safeDuration);
+    const end = clamp(range.end, state.start, state.end || safeDuration);
     if (end - start < 0.03) return;
     setSelection({ start, end });
     writeRangeInputs(target, start, end);
@@ -488,7 +525,7 @@ export default function CutStudioEnhancer() {
           <button type="button" onClick={() => seek(currentTime + .1)} title="Avanzar una décima">›</button>
           <button type="button" onClick={() => seek(currentTime + 5)} title="Avanzar 5 segundos">+5s</button>
         </div>
-        <div className="cut-time-readout"><strong>{formatClock(currentTime)}</strong><span>/ {formatClock(duration)}</span></div>
+        <div className="cut-time-readout"><strong>{formatClock(currentTime)}</strong><span>/ {formatClock(safeDuration)}</span></div>
       </div>
 
       <div className="waveform-shell">
@@ -503,36 +540,36 @@ export default function CutStudioEnhancer() {
         <div className="waveform-legend">
           <span><i className="legend-selection" /> selección</span>
           <span><i className="legend-cut" /> eliminado</span>
-          <span><i className="legend-silence" /> silencio sugerido</span>
-          <small>Haz clic para ir a un punto · arrastra para seleccionar</small>
+          <span><i className="legend-silence" /> silencio</span>
+          <small>Clic = ir · arrastrar = seleccionar</small>
         </div>
       </div>
 
       <div className="cut-quick-actions">
-        <button type="button" onClick={markStart}>Marcar inicio aquí</button>
-        <button type="button" onClick={markEnd}>Marcar final aquí</button>
+        <button type="button" onClick={markStart}>Marcar inicio</button>
+        <button type="button" onClick={markEnd}>Marcar final</button>
         <button type="button" onClick={deleteSelection} disabled={!selection}>Eliminar selección</button>
-        <button type="button" onClick={undoLastCut} disabled={!timeline.ranges.length}>Deshacer último corte</button>
-        <button type="button" onClick={restoreOriginal}>Restaurar original</button>
-        <button type="button" className={previewing ? 'active' : ''} onClick={previewCuts}>{previewing ? 'Detener preview' : 'Previsualizar cortes'}</button>
+        <button type="button" onClick={undoLastCut} disabled={!timeline.ranges.length}>Deshacer</button>
+        <button type="button" onClick={restoreOriginal}>Restaurar</button>
+        <button type="button" className={previewing ? 'active' : ''} onClick={previewCuts}>{previewing ? 'Detener preview' : 'Previsualizar'}</button>
       </div>
 
       {silences.length > 0 && (
         <div className="silence-suggestions">
-          <span>Silencios detectados:</span>
+          <span>Silencios:</span>
           <div>
-            {silences.slice(0, 8).map((range, index) => (
+            {silences.slice(0, 7).map((range, index) => (
               <button type="button" key={`${range.start}-${index}`} onClick={() => chooseSilence(range)}>
                 {formatClock(range.start)}–{formatClock(range.end)}
               </button>
             ))}
-            {silences.length > 8 && <small>+{silences.length - 8} más en la onda</small>}
+            {silences.length > 7 && <small>+{silences.length - 7}</small>}
           </div>
         </div>
       )}
 
       <div className="cut-enhancer-footer">
-        <small>Espacio = Play/Pausa. Los silencios son sugerencias: no se eliminan hasta que tú lo decidas.</small>
+        <small>IN {formatClock(timeline.start)} · OUT {formatClock(timeline.end || safeDuration)} · SALIDA ≈ {formatClock(outputDuration)} · Espacio = Play/Pausa</small>
         <button type="button" className="primary-button" onClick={saveAndNext}>Guardar y siguiente →</button>
       </div>
     </section>,
