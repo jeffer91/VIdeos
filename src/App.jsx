@@ -8,6 +8,7 @@ import FinalRenderManager from './FinalRenderManager';
 import SlideEditorManager from './SlideEditorManager';
 import RecordingViewEnhancer from './RecordingViewEnhancer';
 import CutStudioEnhancer from './CutStudioEnhancer';
+import CutSaveStatusBridge from './CutSaveStatusBridge';
 import IntegrityGuard from './IntegrityGuard';
 import RecoverySafetyGuard from './RecoverySafetyGuard';
 import UpdateEnhancer from './UpdateEnhancer';
@@ -27,6 +28,7 @@ export default function App() {
       <SlideEditorManager />
       <RecordingViewEnhancer />
       <CutStudioEnhancer />
+      <CutSaveStatusBridge />
       <IntegrityGuard />
       <RecoverySafetyGuard />
       <UpdateEnhancer />
