@@ -2,6 +2,9 @@ import { CHANNEL_PROFILE } from './channel.js';
 
 export const AI_FORMAT_RULES = `REGLAS DE FORMATO PARA VIDEOS STUDIO · ${CHANNEL_PROFILE.name}
 
+IMPORTANTE
+Estas reglas son para pegarlas en ChatGPT u otra IA. NO pegues este documento de reglas de vuelta en Videos Studio. En Videos Studio debes pegar únicamente la respuesta generada, comenzando directamente con DIAPOSITIVA 1.
+
 CONTEXTO DEL CANAL
 Canal: ${CHANNEL_PROFILE.name}
 Tema principal: récords, marcas históricas, récords recién rotos y datos extraordinarios del fútbol mundial.
@@ -74,6 +77,18 @@ const CTA_TYPES = new Set(['NINGUNO', 'SUSCRIBIRSE', 'COMENTAR', 'PREGUNTA', 'LI
 const DASHES = /[‐‑‒–—−]/g;
 const INVISIBLE = /[\u200B-\u200D\u2060\uFEFF]/g;
 const UNICODE_SPACES = /[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g;
+const RULE_MARKERS = [
+  'REGLAS DE FORMATO PARA VIDEOS STUDIO',
+  'CONTEXTO DEL CANAL',
+  'OBJETIVO DE VIDEOS STUDIO',
+  'REGLAS DE ESTRUCTURA',
+  'CRITERIO EDITORIAL',
+  'VERIFICACIÓN DE DATOS',
+  'ESTILO DE NARRACIÓN',
+  'ESTRUCTURA NARRATIVA RECOMENDADA',
+  'REGLA FINAL DE SALIDA',
+  'PLANTILLA BASE DE SALIDA',
+];
 
 function normalizeCommonText(value = '') {
   return String(value)
@@ -81,6 +96,13 @@ function normalizeCommonText(value = '') {
     .replace(INVISIBLE, '')
     .replace(UNICODE_SPACES, ' ')
     .replace(/\\([_*~`])/g, '$1');
+}
+
+function normalizedUpper(value = '') {
+  return normalizeCommonText(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
 }
 
 function trimBlankLines(lines = []) {
@@ -200,6 +222,49 @@ function ctaMatchesReading(type, reading = '') {
   return patterns[type]?.test(text) ?? true;
 }
 
+function looksLikeRulesDocument(value = '') {
+  const upper = normalizedUpper(value);
+  const markerCount = RULE_MARKERS.filter((marker) => upper.includes(normalizedUpper(marker))).length;
+  return upper.includes('REGLAS DE FORMATO PARA VIDEOS STUDIO') || markerCount >= 3;
+}
+
+function looksLikePlaceholderTemplate(value = '') {
+  const text = normalizeCommonText(value);
+  const placeholders = text.match(/\[[^\]\n]{1,140}\]/g) || [];
+  const requiredFields = ['GANCHO:', 'TÍTULO:', 'CUERPO:', 'CONTENIDO:', 'LECTURA:', 'VISUAL:', 'CTA:'];
+  const fieldCount = requiredFields.filter((field) => normalizedUpper(text).includes(normalizedUpper(field))).length;
+  return placeholders.length >= 3 && fieldCount >= 5;
+}
+
+function hasRuleMarkersAfterSlideStart(candidate = '') {
+  const upper = normalizedUpper(candidate);
+  return RULE_MARKERS.some((marker) => upper.includes(normalizedUpper(marker)));
+}
+
+function extractEmbeddedScriptFromRules(value = '') {
+  const lines = normalizeCommonText(value).split('\n');
+  const starts = [];
+
+  lines.forEach((line, index) => {
+    const clean = line.replace(/\*\*/g, '').trim().replace(/^#{1,6}\s*/, '');
+    if (/^DIAPOSITIVA\s+1\s*$/i.test(clean)) starts.push(index);
+  });
+
+  for (let index = starts.length - 1; index >= 0; index -= 1) {
+    const candidate = lines.slice(starts[index]).join('\n').trim();
+    if (!candidate) continue;
+    if (looksLikePlaceholderTemplate(candidate)) continue;
+    if (hasRuleMarkersAfterSlideStart(candidate)) continue;
+
+    const upper = normalizedUpper(candidate);
+    const fields = ['GANCHO:', 'TÍTULO:', 'CUERPO:', 'CONTENIDO:', 'LECTURA:', 'VISUAL:', 'CTA:'];
+    const fieldCount = fields.filter((field) => upper.includes(normalizedUpper(field))).length;
+    if (fieldCount >= 6) return candidate;
+  }
+
+  return '';
+}
+
 function finalizeSlide(current, slides, errors, warnings, corrections) {
   if (!current) return;
 
@@ -239,6 +304,9 @@ function finalizeSlide(current, slides, errors, warnings, corrections) {
   if (!visual) warnings.push(`Diapositiva ${current.number}: falta VISUAL. Usa al menos “TIPO: NINGUNO”.`);
   else if (!visualType) warnings.push(`Diapositiva ${current.number}: VISUAL no indica TIPO.`);
   else if (!VISUAL_TYPES.has(visualType)) warnings.push(`Diapositiva ${current.number}: TIPO de VISUAL no reconocido: ${visualType}.`);
+  else if (!['IMAGEN', 'NINGUNO'].includes(visualType) && !visualHasSupportingData(visual)) {
+    warnings.push(`Diapositiva ${current.number}: el VISUAL ${visualType} necesita datos para poder construirlo.`);
+  }
 
   if (!cta) warnings.push(`Diapositiva ${current.number}: falta CTA. Usa al menos “TIPO: NINGUNO”.`);
   else if (!ctaType) warnings.push(`Diapositiva ${current.number}: CTA no indica TIPO.`);
@@ -291,7 +359,7 @@ function validateStoryStructure(slides, errors, warnings) {
   });
 
   if (!slides[0].hook?.trim()) {
-    warnings.push('La primera diapositiva no tiene GANCHO. Un video de 11 Records debería abrir con una razón clara para seguir mirando.');
+    warnings.push(`La primera diapositiva no tiene GANCHO. Un video de ${CHANNEL_PROFILE.name} debería abrir con una razón clara para seguir mirando.`);
   }
 
   if (slides.length >= 3) {
@@ -318,7 +386,43 @@ function validateStoryStructure(slides, errors, warnings) {
 
 export function parseSlides(rawText = '') {
   const corrections = [];
-  const normalized = normalizeCommonText(rawText);
+  let normalized = normalizeCommonText(rawText).trim();
+
+  if (!normalized) {
+    return {
+      slides: [],
+      errors: ['No hay contenido para procesar.'],
+      warnings: [],
+      corrections: [],
+      inputKind: 'empty',
+    };
+  }
+
+  const rulesDetected = looksLikeRulesDocument(normalized);
+  if (rulesDetected) {
+    const embeddedScript = extractEmbeddedScriptFromRules(normalized);
+    if (embeddedScript) {
+      normalized = embeddedScript;
+      corrections.push('Videos Studio detectó instrucciones mezcladas con el guion y extrajo automáticamente las diapositivas reales.');
+    } else {
+      return {
+        slides: [],
+        errors: [`Pegaste las reglas de ${CHANNEL_PROFILE.name}, no el guion generado. Copia estas reglas en ChatGPT y pega aquí únicamente su respuesta, comenzando por “DIAPOSITIVA 1”.`],
+        warnings: ['Videos Studio ignoró los ejemplos y plantillas incluidos dentro de las reglas para evitar crear diapositivas falsas.'],
+        corrections: [],
+        inputKind: 'rules',
+      };
+    }
+  } else if (looksLikePlaceholderTemplate(normalized)) {
+    return {
+      slides: [],
+      errors: ['Pegaste una plantilla sin completar. Reemplaza los textos entre corchetes por el guion real antes de procesarla.'],
+      warnings: [],
+      corrections: [],
+      inputKind: 'template',
+    };
+  }
+
   const lines = normalized.split('\n');
   const slides = [];
   const errors = [];
@@ -362,7 +466,7 @@ export function parseSlides(rawText = '') {
     }
 
     if (!current) {
-      if (trimmed) outsideText.push(line);
+      if (trimmed && !/^```(?:text|txt|markdown)?\s*$/i.test(trimmed)) outsideText.push(line);
       continue;
     }
 
@@ -387,6 +491,7 @@ export function parseSlides(rawText = '') {
     }
     if (matched) continue;
 
+    if (/^```\s*$/.test(trimmed)) continue;
     if (section) current[section].push(line);
     else if (trimmed) warnings.push(`Diapositiva ${current.number}: texto fuera de los campos reconocidos: “${trimmed}”.`);
   }
@@ -406,8 +511,14 @@ export function parseSlides(rawText = '') {
 
   const uniqueCorrections = [...new Set(corrections)];
   if (uniqueCorrections.length) {
-    warnings.unshift(`Videos Studio corrigió automáticamente ${uniqueCorrections.length} detalle${uniqueCorrections.length === 1 ? '' : 's'} de formato al pegar el contenido.`);
+    warnings.unshift(`Videos Studio corrigió automáticamente ${uniqueCorrections.length} detalle${uniqueCorrections.length === 1 ? '' : 's'} al pegar el contenido.`);
   }
 
-  return { slides, errors, warnings, corrections: uniqueCorrections };
+  return {
+    slides,
+    errors: [...new Set(errors)],
+    warnings: [...new Set(warnings)],
+    corrections: uniqueCorrections,
+    inputKind: 'script',
+  };
 }
