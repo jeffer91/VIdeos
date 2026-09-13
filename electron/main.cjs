@@ -1,11 +1,15 @@
 const { app, BrowserWindow, session, ipcMain, dialog, shell, clipboard } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 
 let mainWindow = null;
 let viteServer = null;
 let rendererUrl = null;
+let updateInterval = null;
 
+const APP_ID = 'com.jeffer91.videosstudio';
+const CHANNEL_NAME = '11 Records';
 const LIBRARY_CATEGORIES = new Set(['intros', 'transitions', 'endings', 'cta', 'memes', 'templates']);
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 
@@ -41,6 +45,10 @@ function configureMediaPermissions() {
   });
 }
 
+function normalizeClipboardText(value = '') {
+  return String(value).replace(/\r\n?/g, '\n').normalize('NFC');
+}
+
 function configureClipboardIpc() {
   ipcMain.handle('clipboard:write-text', (event, value = '') => {
     const senderUrl = event.senderFrame?.url || event.sender?.getURL?.() || '';
@@ -52,14 +60,18 @@ function configureClipboardIpc() {
 
     clipboard.writeText(text, 'clipboard');
     const copied = clipboard.readText('clipboard');
-    if (copied !== text) throw new Error('No se pudo verificar el contenido copiado.');
-    return { ok: true, length: text.length };
+    const verified = normalizeClipboardText(copied) === normalizeClipboardText(text);
+    return { ok: true, length: text.length, verified };
   });
 }
 
 function libraryRoot() {
-  const base = app.isPackaged ? path.dirname(process.execPath) : app.getAppPath();
-  return path.join(base, 'library');
+  if (!app.isPackaged) return path.join(app.getAppPath(), 'library');
+  return path.join(app.getPath('documents'), 'Videos Studio', 'library');
+}
+
+function legacyLibraryRoot() {
+  return path.join(path.dirname(process.execPath), 'library');
 }
 
 function safeSegment(value = '') {
@@ -86,6 +98,38 @@ function isInside(root, target) {
 
 async function ensureDirectory(directory) {
   await fs.mkdir(directory, { recursive: true });
+}
+
+async function pathExists(target) {
+  try {
+    await fs.access(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function migrateLegacyLibrary() {
+  if (!app.isPackaged) return;
+  const source = legacyLibraryRoot();
+  const destination = libraryRoot();
+  if (path.resolve(source) === path.resolve(destination)) return;
+  if (!(await pathExists(source))) {
+    await ensureDirectory(destination);
+    return;
+  }
+
+  await ensureDirectory(destination);
+  try {
+    await fs.cp(source, destination, {
+      recursive: true,
+      force: false,
+      errorOnExist: false,
+      preserveTimestamps: true,
+    });
+  } catch (caught) {
+    console.warn('No se pudo migrar completamente la biblioteca antigua:', caught);
+  }
 }
 
 async function uniqueDestination(directory, sourcePath) {
@@ -155,7 +199,7 @@ async function writeDefaults(value) {
   await fs.writeFile(path.join(libraryRoot(), 'defaults.json'), JSON.stringify(value, null, 2), 'utf8');
 }
 
-function imageMimeType(filePath) {
+function imageMimeType(filePath = '') {
   const extension = path.extname(filePath).toLowerCase();
   if (extension === '.png') return 'image/png';
   if (extension === '.webp') return 'image/webp';
@@ -263,6 +307,69 @@ function configureLibraryIpc() {
   });
 }
 
+function sendUpdateStatus(payload) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('update:status', payload);
+}
+
+function configureUpdateIpc() {
+  ipcMain.handle('app:get-info', () => ({
+    name: app.getName(),
+    version: app.getVersion(),
+    channel: CHANNEL_NAME,
+    packaged: app.isPackaged,
+    libraryPath: libraryRoot(),
+  }));
+
+  ipcMain.handle('update:check', async () => {
+    if (!app.isPackaged) return { ok: false, reason: 'development' };
+    sendUpdateStatus({ state: 'checking' });
+    try {
+      const result = await autoUpdater.checkForUpdates();
+      return { ok: true, version: result?.updateInfo?.version || null };
+    } catch (caught) {
+      sendUpdateStatus({ state: 'error', message: caught.message || 'No se pudo comprobar la actualización.' });
+      throw caught;
+    }
+  });
+
+  ipcMain.handle('update:install', () => {
+    if (!app.isPackaged) return { ok: false, reason: 'development' };
+    autoUpdater.quitAndInstall(false, true);
+    return { ok: true };
+  });
+}
+
+function configureAutoUpdater() {
+  if (!app.isPackaged) return;
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowPrerelease = false;
+
+  autoUpdater.on('checking-for-update', () => sendUpdateStatus({ state: 'checking' }));
+  autoUpdater.on('update-available', (info) => sendUpdateStatus({ state: 'available', version: info.version }));
+  autoUpdater.on('update-not-available', (info) => sendUpdateStatus({ state: 'current', version: info.version }));
+  autoUpdater.on('download-progress', (progress) => sendUpdateStatus({
+    state: 'downloading',
+    percent: progress.percent,
+    transferred: progress.transferred,
+    total: progress.total,
+  }));
+  autoUpdater.on('update-downloaded', (info) => sendUpdateStatus({ state: 'downloaded', version: info.version }));
+  autoUpdater.on('error', (error) => sendUpdateStatus({
+    state: 'error',
+    message: error?.message || 'No se pudo actualizar Videos Studio.',
+  }));
+
+  const check = () => autoUpdater.checkForUpdates().catch((caught) => {
+    console.warn('Auto update check failed:', caught);
+  });
+
+  setTimeout(check, 5000);
+  updateInterval = setInterval(check, 4 * 60 * 60 * 1000);
+}
+
 async function startRenderer() {
   if (app.isPackaged) return null;
 
@@ -282,6 +389,7 @@ async function startRenderer() {
 }
 
 async function createWindow() {
+  const iconPath = path.join(app.getAppPath(), 'build', 'icon.ico');
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 880,
@@ -290,7 +398,8 @@ async function createWindow() {
     show: false,
     autoHideMenuBar: true,
     backgroundColor: '#F5F7FA',
-    title: 'Videos Studio',
+    title: `Videos Studio · ${CHANNEL_NAME}`,
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
@@ -324,11 +433,15 @@ async function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
+  await migrateLegacyLibrary();
   configureMediaPermissions();
   configureLibraryIpc();
   configureClipboardIpc();
+  configureUpdateIpc();
   rendererUrl = await startRenderer();
   await createWindow();
+  configureAutoUpdater();
 
   app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) await createWindow();
@@ -340,6 +453,10 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  if (updateInterval) {
+    clearInterval(updateInterval);
+    updateInterval = null;
+  }
   if (viteServer) {
     void viteServer.close();
     viteServer = null;
