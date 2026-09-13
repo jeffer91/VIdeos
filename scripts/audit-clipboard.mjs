@@ -9,13 +9,10 @@ const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, '..');
 const read = (file) => readFile(path.join(root, file), 'utf8');
 
-const requiredFields = ['GANCHO:', 'TÍTULO:', 'CUERPO:', 'CONTENIDO:', 'LECTURA:', 'VISUAL:', 'CTA:'];
-for (const field of requiredFields) {
-  assert(AI_FORMAT_RULES.includes(field), `Las reglas copiadas deben incluir ${field}`);
-}
-assert(AI_FORMAT_RULES.includes('DIAPOSITIVA 1'), 'Las reglas deben explicar cómo inicia cada diapositiva.');
-assert(AI_FORMAT_RULES.includes('//'), 'Las reglas deben incluir el separador entre diapositivas.');
-assert(AI_FORMAT_RULES.includes('Devuelve solamente las diapositivas'), 'Las reglas deben pedir una salida limpia para pegarla directamente en la app.');
+const requiredMarkers = ['PROMPT MAESTRO', '===DIAPOSITIVA 1===', '===GANCHO===', '===TITULO===', '===CUERPO===', 'CUERPO_1=', '===CONTENIDO===', 'CONTENIDO_1=', '===LECTURA===', '===FIN_LECTURA===', '===VISUAL===', 'VISUAL_TIPO=', '===CTA===', 'CTA_TIPO=', '===FIN_DIAPOSITIVA 1==='];
+for (const marker of requiredMarkers) assert(AI_FORMAT_RULES.includes(marker), `El prompt debe incluir ${marker}`);
+assert(AI_FORMAT_RULES.includes('Devuelve únicamente el contenido destinado a Videos Studio'), 'El prompt debe pedir una salida limpia.');
+assert(AI_FORMAT_RULES.includes('No uses bloques de código Markdown'), 'El prompt debe evitar Markdown que pueda ensuciar el pegado.');
 
 const production = await read('src/ProductionApp.jsx');
 const enhancer = await read('src/ClipboardEnhancer.jsx');
@@ -23,12 +20,14 @@ const appSource = await read('src/App.jsx');
 const preload = await read('electron/preload.cjs');
 const main = await read('electron/main.cjs');
 
-assert(production.includes('Copiar reglas IA'), 'Contenido debe conservar el botón Copiar reglas IA.');
-assert(production.includes('Descargar reglas'), 'Debe existir Descargar reglas como respaldo.');
+assert(production.includes('Copiar reglas IA'), 'ProductionApp conserva el control base que el enhancer transforma a prompt.');
+assert(enhancer.includes('Copiar prompt IA'), 'La interfaz debe mostrar Copiar prompt IA.');
+assert(enhancer.includes('Descargar prompt'), 'La interfaz debe mostrar Descargar prompt.');
+assert(enhancer.includes('prompt-maestro-11-records-videos-studio.txt'), 'La descarga debe tener un nombre claro.');
 assert(enhancer.includes("window.videosStudio?.clipboard?.writeText"), 'La copia debe priorizar el portapapeles nativo de Electron.');
 assert(enhancer.includes('navigator.clipboard?.writeText'), 'Debe existir respaldo web para el portapapeles.');
 assert(enhancer.includes("document.execCommand?.('copy')"), 'Debe existir un último respaldo para contextos sin Clipboard API.');
-assert(enhancer.includes("event.stopImmediatePropagation?.()"), 'El puente debe impedir que el handler antiguo ejecute una segunda copia.');
+assert(enhancer.includes("event.stopImmediatePropagation?.()"), 'El enhancer debe impedir una segunda acción del handler antiguo.');
 assert(enhancer.includes("Number(result.length) !== AI_FORMAT_RULES.length"), 'La copia nativa debe verificarse antes de mostrar éxito.');
 assert(appSource.includes('<ClipboardEnhancer />'), 'ClipboardEnhancer debe estar montado globalmente.');
 assert(preload.includes("ipcRenderer.invoke('clipboard:write-text', text)"), 'Preload debe exponer el canal seguro de portapapeles.');
@@ -36,9 +35,10 @@ assert(main.includes("ipcMain.handle('clipboard:write-text'"), 'Electron main de
 assert(main.includes("clipboard.readText('clipboard')"), 'Electron main debe verificar que el texto realmente quedó copiado.');
 assert(main.includes('isTrustedRendererOrigin(senderUrl)'), 'El canal de portapapeles debe rechazar orígenes no confiables.');
 
-const sample = `DIAPOSITIVA 1\nGANCHO:\nEsto cambia todo.\n\nTÍTULO:\nPrueba\n\nCUERPO:\n- Punto uno.\n\nCONTENIDO:\n- Dato uno.\n\nLECTURA:\nTexto para leer.\n\nVISUAL:\nTIPO: IMAGEN\nDESCRIPCIÓN: Imagen de prueba.\n\nCTA:\nTIPO: SUSCRIBIRSE\nTEXTO: Suscríbete.\n\n//`;
+const sample = `===DIAPOSITIVA 1===\n===GANCHO===\nEsto cambia todo.\n===TITULO===\nPrueba\n===CUERPO===\nCUERPO_1=Punto uno.\n===CONTENIDO===\nCONTENIDO_1=Dato uno.\n===LECTURA===\nSuscríbete a 11 Records.\n===FIN_LECTURA===\n===VISUAL===\nVISUAL_TIPO=IMAGEN\nVISUAL_DESCRIPCION=Imagen de prueba.\n===CTA===\nCTA_TIPO=SUSCRIBIRSE\nCTA_TEXTO=Suscríbete.\n===FIN_DIAPOSITIVA 1===`;
 const parsed = parseSlides(sample);
-assert.equal(parsed.errors.length, 0, `El formato descrito por las reglas debe ser aceptado por el parser: ${parsed.errors.join(' | ')}`);
-assert.equal(parsed.slides.length, 1, 'El formato de reglas debe producir una diapositiva válida.');
+assert.equal(parsed.errors.length, 0, `El formato descrito por el prompt debe ser aceptado: ${parsed.errors.join(' | ')}`);
+assert.equal(parsed.slides.length, 1, 'El prompt debe producir una diapositiva válida.');
+assert.equal(parsed.inputKind, 'structured-script');
 
-console.log(`Auditoría portapapeles OK · ${AI_FORMAT_RULES.length} caracteres · ${requiredFields.length} campos obligatorios · puente nativo verificado.`);
+console.log(`Auditoría portapapeles OK · ${AI_FORMAT_RULES.length} caracteres · prompt maestro y puente nativo verificados.`);
