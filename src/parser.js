@@ -1,43 +1,62 @@
 import { CHANNEL_PROFILE } from './channel.js';
 
-export const AI_FORMAT_RULES = `REGLAS DE FORMATO PARA VIDEOS STUDIO · ${CHANNEL_PROFILE.name}
+export const AI_FORMAT_RULES = `PROMPT MAESTRO · ${CHANNEL_PROFILE.name} · Videos Studio
 
-IMPORTANTE
-Estas reglas son para pegarlas en ChatGPT u otra IA. NO pegues este documento de reglas de vuelta en Videos Studio. En Videos Studio debes pegar únicamente la respuesta generada, comenzando directamente con DIAPOSITIVA 1.
+Actúa como guionista, editor de estructura y verificador de datos para el canal ${CHANNEL_PROFILE.name}, dedicado a récords, marcas históricas, récords recién rotos y datos extraordinarios del fútbol mundial.
 
-CONTEXTO DEL CANAL
-Canal: ${CHANNEL_PROFILE.name}
-Tema principal: récords, marcas históricas, récords recién rotos y datos extraordinarios del fútbol mundial.
-Objetivo: producir videos largos de YouTube claros, dinámicos y verificables. Prioriza datos concretos, contexto, comparación y relevancia del récord. No inventes cifras, edades, fechas, goles, asistencias ni marcas. Si un dato no está confirmado, no lo presentes como hecho.
+TU TAREA
+Cuando te dé un tema, noticia, jugador, club, competición o récord, conviértelo en un guion largo de YouTube dividido en diapositivas listas para Videos Studio.
 
-OBJETIVO DE VIDEOS STUDIO
-Genera un video por diapositivas usando EXACTAMENTE la estructura indicada. No cambies los nombres de los campos. Cada diapositiva debe funcionar como una escena independiente pero mantener continuidad con la anterior.
+Antes de escribir:
+- Verifica qué ocurrió y qué tipo de récord o hito es.
+- Distingue entre récord roto, igualado, récord de club, competición, nacional, mundial o simple hito estadístico.
+- No inventes cifras, fechas, edades, goles, asistencias, partidos, marcas anteriores ni declaraciones.
+- Si un dato no está confirmado, no lo presentes como hecho.
+- Cuando exista información fiable, explica quién tenía el récord anterior y por qué la nueva marca importa.
 
-FORMATO OBLIGATORIO
+ESTILO DE ${CHANNEL_PROFILE.name.toUpperCase()}
+- Narración clara, dinámica, humana y fácil de seguir.
+- Cada diapositiva debe aportar algo nuevo: dato, contexto, comparación, consecuencia o proyección.
+- Evita repetir la misma información entre CUERPO, CONTENIDO y diapositivas consecutivas.
+- CUERPO = ideas principales que verá el espectador.
+- CONTENIDO = cifras, edades, fechas, comparaciones o contexto que complementa el CUERPO.
+- LECTURA = texto exacto del teleprompter; debe sonar como una persona contando una historia.
+- VISUAL = recurso que realmente ayude a entender el dato, no simple decoración.
+- Incluye un CTA natural aproximadamente a la mitad del video y uno de SUSCRIBIRSE en la última diapositiva.
+
+CONTRATO DE SALIDA
+Devuelve SOLAMENTE el guion. No escribas introducciones, explicaciones, notas, comentarios ni bloques de código.
+Comienza directamente con DIAPOSITIVA 1.
+Numera de forma consecutiva: DIAPOSITIVA 1, DIAPOSITIVA 2, DIAPOSITIVA 3...
+Separa cada diapositiva con una línea que contenga únicamente //.
+Usa SIEMPRE y en este orden: GANCHO, TÍTULO, CUERPO, CONTENIDO, LECTURA, VISUAL y CTA.
+
+FORMATO EXACTO
 
 DIAPOSITIVA 1
+
 GANCHO:
-Frase breve y potente que capte la atención al comenzar esta parte del video.
+[Frase breve, potente y distinta del título]
 
 TÍTULO:
-Título corto de la diapositiva
+[Título corto y claro]
 
 CUERPO:
-- Punto visual 1.
-- Punto visual 2.
-- Punto visual 3.
+- [Idea principal 1]
+- [Idea principal 2]
+- [Idea principal 3]
 
 CONTENIDO:
-- Dato, cifra o idea complementaria 1.
-- Dato, cifra o idea complementaria 2.
-- Dato, cifra o idea complementaria 3.
+- [Dato o contexto 1]
+- [Dato o contexto 2]
+- [Dato o contexto 3]
 
 LECTURA:
-Texto exacto que debe leer el presentador durante la grabación. Puede ser uno o varios párrafos naturales.
+[Texto natural del teleprompter. Explica qué ocurrió, por qué importa y da contexto a las cifras principales.]
 
 VISUAL:
 TIPO: IMAGEN
-DESCRIPCIÓN: Describe la imagen, gráfico, tabla, comparativa, cronología o recurso que ayudará a entender esta diapositiva.
+DESCRIPCIÓN: [Describe el apoyo visual.]
 
 CTA:
 TIPO: NINGUNO
@@ -45,48 +64,37 @@ TEXTO:
 
 //
 
-REGLAS DE ESTRUCTURA
-1. Cada bloque comienza con DIAPOSITIVA seguido de su número consecutivo: 1, 2, 3, 4...
-2. Usa siempre GANCHO, TÍTULO, CUERPO, CONTENIDO, LECTURA, VISUAL y CTA.
-3. CUERPO y CONTENIDO son lo que verá el espectador y deben ir por puntos. Usa preferentemente guion: - Punto.
-4. CUERPO resume las ideas principales; CONTENIDO aporta cifras, contexto o datos complementarios. Evita repetir exactamente lo mismo en ambos.
-5. LECTURA es únicamente lo que leerá el presentador en el prompter. No pongas instrucciones de cámara, edición ni gestos.
-6. Mantén coherencia factual entre TÍTULO, CUERPO, CONTENIDO, LECTURA y VISUAL.
-7. Si mencionas una cifra importante en CUERPO o CONTENIDO, procura explicarla también en LECTURA.
-8. VISUAL puede ser: IMAGEN, GRAFICO_BARRAS, TABLA, COMPARATIVA, CRONOLOGIA, DIAGRAMA o NINGUNO.
-9. Si VISUAL es gráfico, tabla, comparativa, cronología o diagrama, incluye los datos necesarios en líneas claras dentro del bloque VISUAL.
-10. CTA puede ser: NINGUNO, SUSCRIBIRSE, COMENTAR, PREGUNTA, LIKE u OTRO.
-11. La primera diapositiva debe tener un GANCHO fuerte y presentar rápidamente por qué el récord importa.
-12. Aproximadamente a la mitad del video incluye un CTA natural. No repitas CTA en exceso.
-13. La última diapositiva debe usar CTA TIPO: SUSCRIBIRSE y ser coherente con la LECTURA.
-14. Cuando sea natural, el CTA final debe mencionar ${CHANNEL_PROFILE.name}.
-15. Separa cada diapositiva con una línea que contenga únicamente //.
-16. No omitas VISUAL ni CTA. Si no hacen falta, usa TIPO: NINGUNO.
-17. Devuelve solamente las diapositivas en este formato, sin explicaciones antes ni después.
+TIPOS DE VISUAL PERMITIDOS
+IMAGEN, GRAFICO_BARRAS, TABLA, COMPARATIVA, CRONOLOGIA, DIAGRAMA, NINGUNO.
+Si usas gráfico, tabla, comparativa, cronología o diagrama, añade dentro de VISUAL los datos necesarios para construirlo.
 
-CRITERIO EDITORIAL DE ${CHANNEL_PROFILE.name.toUpperCase()}
-- Prioriza récords realmente llamativos y fáciles de entender.
-- Explica quién tenía el récord anterior y por qué la nueva marca es relevante cuando ese dato exista.
-- Evita exageraciones que contradigan las cifras.
-- No llames “récord mundial”, “récord histórico” o “primero de la historia” a algo si el dato no está sustentado.
-- Los títulos deben ser claros y atractivos, no una repetición literal de la LECTURA.
-- La narración debe sonar humana y fluida, no como una lista de estadísticas.`;
+TIPOS DE CTA PERMITIDOS
+NINGUNO, SUSCRIBIRSE, COMENTAR, PREGUNTA, LIKE, OTRO.
+Si CTA es distinto de NINGUNO, intégralo también de forma natural dentro de LECTURA.
+La última diapositiva debe usar TIPO: SUSCRIBIRSE y, cuando sea natural, mencionar ${CHANNEL_PROFILE.name}.
+
+REGLA FINAL
+No alargues artificialmente una historia sencilla y no comprimas una historia compleja. El objetivo es que cada diapositiva tenga una razón clara de existir y que el espectador entienda por qué el dato es extraordinario.
+
+IMPORTANTE PARA VIDEOS STUDIO
+Este prompt se pega en ChatGPT u otra IA. Después, copia únicamente la respuesta generada que empieza con DIAPOSITIVA 1 y pégala en Videos Studio.`;
 
 const VISUAL_TYPES = new Set(['IMAGEN', 'GRAFICO_BARRAS', 'TABLA', 'COMPARATIVA', 'CRONOLOGIA', 'DIAGRAMA', 'NINGUNO']);
 const CTA_TYPES = new Set(['NINGUNO', 'SUSCRIBIRSE', 'COMENTAR', 'PREGUNTA', 'LIKE', 'OTRO']);
 const DASHES = /[‐‑‒–—−]/g;
 const INVISIBLE = /[\u200B-\u200D\u2060\uFEFF]/g;
 const UNICODE_SPACES = /[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g;
-const RULE_MARKERS = [
+const PROMPT_MARKERS = [
+  'PROMPT MAESTRO',
+  'TU TAREA',
+  'ESTILO DE',
+  'CONTRATO DE SALIDA',
+  'FORMATO EXACTO',
+  'TIPOS DE VISUAL PERMITIDOS',
+  'TIPOS DE CTA PERMITIDOS',
+  'IMPORTANTE PARA VIDEOS STUDIO',
   'REGLAS DE FORMATO PARA VIDEOS STUDIO',
-  'CONTEXTO DEL CANAL',
-  'OBJETIVO DE VIDEOS STUDIO',
   'REGLAS DE ESTRUCTURA',
-  'CRITERIO EDITORIAL',
-  'VERIFICACIÓN DE DATOS',
-  'ESTILO DE NARRACIÓN',
-  'ESTRUCTURA NARRATIVA RECOMENDADA',
-  'REGLA FINAL DE SALIDA',
   'PLANTILLA BASE DE SALIDA',
 ];
 
@@ -129,7 +137,7 @@ function blockType(value = '') {
 
 function normalizeBulletLine(line = '') {
   let text = normalizeCommonText(line).trim();
-  if (!text) return { text: '', bullet: false, changed: false };
+  if (!text) return { text: '', bullet: false, changed: false, added: false };
 
   const original = text;
   text = text.replace(DASHES, '-');
@@ -143,11 +151,13 @@ function normalizeBulletLine(line = '') {
     const match = text.match(matcher);
     if (!match) continue;
     const value = match[1].trim();
-    const standardHyphen = /^-\s+\S/u.test(original);
-    return { text: `- ${value}`, bullet: Boolean(value), changed: !standardHyphen && original !== `- ${value}` };
+    const canonical = `- ${value}`;
+    return { text: canonical, bullet: Boolean(value), changed: original !== canonical, added: false };
   }
 
-  return { text, bullet: false, changed: original !== text };
+  // CUERPO y CONTENIDO son listas por definición. Si al pegar desde una IA o
+  // portapapeles enriquecido desaparecen las viñetas, Videos Studio las recupera.
+  return { text: `- ${text}`, bullet: true, changed: true, added: true };
 }
 
 function normalizeBulletBlock(value = '') {
@@ -156,6 +166,7 @@ function normalizeBulletBlock(value = '') {
   let changed = false;
   let nonEmpty = 0;
   let bulletCount = 0;
+  let autoAdded = 0;
 
   rawLines.forEach((line) => {
     if (!line.trim()) return;
@@ -163,6 +174,7 @@ function normalizeBulletBlock(value = '') {
     const result = normalizeBulletLine(line);
     if (result.changed) changed = true;
     if (result.bullet) bulletCount += 1;
+    if (result.added) autoAdded += 1;
     normalized.push(result.text);
   });
 
@@ -171,6 +183,7 @@ function normalizeBulletBlock(value = '') {
     valid: nonEmpty > 0 && bulletCount === nonEmpty,
     changed,
     count: bulletCount,
+    autoAdded,
   };
 }
 
@@ -213,26 +226,26 @@ function ctaMatchesReading(type, reading = '') {
   return patterns[type]?.test(text) ?? true;
 }
 
-function looksLikeRulesDocument(value = '') {
+function looksLikePromptDocument(value = '') {
   const upper = normalizedUpper(value);
-  const markerCount = RULE_MARKERS.filter((marker) => upper.includes(normalizedUpper(marker))).length;
-  return upper.includes('REGLAS DE FORMATO PARA VIDEOS STUDIO') || markerCount >= 3;
+  const markerCount = PROMPT_MARKERS.filter((marker) => upper.includes(normalizedUpper(marker))).length;
+  return upper.includes('PROMPT MAESTRO') || upper.includes('REGLAS DE FORMATO PARA VIDEOS STUDIO') || markerCount >= 3;
 }
 
 function looksLikePlaceholderTemplate(value = '') {
   const text = normalizeCommonText(value);
-  const placeholders = text.match(/\[[^\]\n]{1,140}\]/g) || [];
+  const placeholders = text.match(/\[[^\]\n]{1,180}\]/g) || [];
   const requiredFields = ['GANCHO:', 'TÍTULO:', 'CUERPO:', 'CONTENIDO:', 'LECTURA:', 'VISUAL:', 'CTA:'];
   const fieldCount = requiredFields.filter((field) => normalizedUpper(text).includes(normalizedUpper(field))).length;
   return placeholders.length >= 3 && fieldCount >= 5;
 }
 
-function hasRuleMarkersAfterSlideStart(candidate = '') {
+function hasPromptMarkersAfterSlideStart(candidate = '') {
   const upper = normalizedUpper(candidate);
-  return RULE_MARKERS.some((marker) => upper.includes(normalizedUpper(marker)));
+  return PROMPT_MARKERS.some((marker) => upper.includes(normalizedUpper(marker)));
 }
 
-function extractEmbeddedScriptFromRules(value = '') {
+function extractEmbeddedScriptFromPrompt(value = '') {
   const lines = normalizeCommonText(value).split('\n');
   const starts = [];
 
@@ -245,7 +258,7 @@ function extractEmbeddedScriptFromRules(value = '') {
     const candidate = lines.slice(starts[index]).join('\n').trim();
     if (!candidate) continue;
     if (looksLikePlaceholderTemplate(candidate)) continue;
-    if (hasRuleMarkersAfterSlideStart(candidate)) continue;
+    if (hasPromptMarkersAfterSlideStart(candidate)) continue;
 
     const upper = normalizedUpper(candidate);
     const fields = ['GANCHO:', 'TÍTULO:', 'CUERPO:', 'CONTENIDO:', 'LECTURA:', 'VISUAL:', 'CTA:'];
@@ -279,8 +292,14 @@ function finalizeSlide(current, slides, errors, warnings, corrections) {
     return;
   }
 
-  if (bodyNormalized.changed) corrections.push(`Diapositiva ${current.number}: se normalizó el formato de CUERPO.`);
-  if (contentNormalized.changed) corrections.push(`Diapositiva ${current.number}: se normalizó el formato de CONTENIDO.`);
+  if (bodyNormalized.changed) {
+    const detail = bodyNormalized.autoAdded ? ' y recuperó puntos que habían perdido la viñeta' : '';
+    corrections.push(`Diapositiva ${current.number}: se normalizó CUERPO${detail}.`);
+  }
+  if (contentNormalized.changed) {
+    const detail = contentNormalized.autoAdded ? ' y recuperó puntos que habían perdido la viñeta' : '';
+    corrections.push(`Diapositiva ${current.number}: se normalizó CONTENIDO${detail}.`);
+  }
 
   if (!title) errors.push(`Diapositiva ${current.number}: falta TÍTULO.`);
   if (!body) errors.push(`Diapositiva ${current.number}: falta CUERPO.`);
@@ -288,8 +307,8 @@ function finalizeSlide(current, slides, errors, warnings, corrections) {
 
   const bodyBulleted = !body || bodyNormalized.valid;
   const contentBulleted = !content || contentNormalized.valid;
-  if (body && !bodyBulleted) errors.push(`Diapositiva ${current.number}: CUERPO debe estar escrito por puntos.`);
-  if (content && !contentBulleted) errors.push(`Diapositiva ${current.number}: CONTENIDO debe estar escrito por puntos.`);
+  if (body && !bodyBulleted) errors.push(`Diapositiva ${current.number}: no se pudo interpretar CUERPO.`);
+  if (content && !contentBulleted) errors.push(`Diapositiva ${current.number}: no se pudo interpretar CONTENIDO.`);
   if (!reading) warnings.push(`Diapositiva ${current.number}: falta LECTURA. No podrás grabarla hasta agregarla.`);
 
   if (!visual) warnings.push(`Diapositiva ${current.number}: falta VISUAL. Usa al menos “TIPO: NINGUNO”.`);
@@ -386,25 +405,25 @@ export function parseSlides(rawText = '') {
     };
   }
 
-  const rulesDetected = looksLikeRulesDocument(normalized);
-  if (rulesDetected) {
-    const embeddedScript = extractEmbeddedScriptFromRules(normalized);
+  const promptDetected = looksLikePromptDocument(normalized);
+  if (promptDetected) {
+    const embeddedScript = extractEmbeddedScriptFromPrompt(normalized);
     if (embeddedScript) {
       normalized = embeddedScript;
-      corrections.push('Videos Studio detectó instrucciones mezcladas con el guion y extrajo automáticamente las diapositivas reales.');
+      corrections.push('Videos Studio detectó el prompt mezclado con el guion y extrajo automáticamente las diapositivas reales.');
     } else {
       return {
         slides: [],
-        errors: [`Pegaste las reglas de ${CHANNEL_PROFILE.name}, no el guion generado. Copia estas reglas en ChatGPT y pega aquí únicamente su respuesta, comenzando por “DIAPOSITIVA 1”.`],
-        warnings: ['Videos Studio ignoró los ejemplos y plantillas incluidos dentro de las reglas para evitar crear diapositivas falsas.'],
+        errors: [`Pegaste el prompt de ${CHANNEL_PROFILE.name}, no el guion generado. Pega este prompt en ChatGPT y luego pega aquí únicamente la respuesta que empieza por “DIAPOSITIVA 1”.`],
+        warnings: [],
         corrections: [],
-        inputKind: 'rules',
+        inputKind: 'prompt',
       };
     }
   } else if (looksLikePlaceholderTemplate(normalized)) {
     return {
       slides: [],
-      errors: ['Pegaste una plantilla sin completar. Reemplaza los textos entre corchetes por el guion real antes de procesarla.'],
+      errors: ['Pegaste una plantilla sin completar. Pega el guion generado por la IA, no la plantilla de ejemplo.'],
       warnings: [],
       corrections: [],
       inputKind: 'template',
@@ -499,7 +518,7 @@ export function parseSlides(rawText = '') {
 
   const uniqueCorrections = [...new Set(corrections)];
   if (uniqueCorrections.length) {
-    warnings.unshift(`Videos Studio corrigió automáticamente ${uniqueCorrections.length} detalle${uniqueCorrections.length === 1 ? '' : 's'} al pegar el contenido.`);
+    warnings.unshift(`Videos Studio corrigió automáticamente ${uniqueCorrections.length} detalle${uniqueCorrections.length === 1 ? '' : 's'} de formato al pegar el guion.`);
   }
 
   return {
