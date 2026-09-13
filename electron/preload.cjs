@@ -26,5 +26,7 @@ contextBridge.exposeInMainWorld('videosStudio', {
     reveal: (options) => ipcRenderer.invoke('library:reveal', options),
     open: (options) => ipcRenderer.invoke('library:open', options),
     readDataUrl: (options) => ipcRenderer.invoke('library:read-data-url', options),
+    readBytes: (options) => ipcRenderer.invoke('library:read-bytes', options),
+    writeBytes: (options) => ipcRenderer.invoke('library:write-bytes', options),
   },
 });
