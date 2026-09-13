@@ -168,3 +168,43 @@ export async function pruneVisualAssets(projectId, validSlideNumbers = []) {
   await transactionDone(writeTx);
   return staleAssets.length + staleSettings.length;
 }
+
+export async function removeVisualSlideAndShift(projectId, removedSlideNumber) {
+  if (!projectId || !removedSlideNumber) return;
+  const removed = Number(removedSlideNumber);
+  const db = await openVisualDb();
+
+  const readTx = db.transaction([ASSETS_STORE, SETTINGS_STORE], 'readonly');
+  const assetRows = (await requestValue(readTx.objectStore(ASSETS_STORE).index('by_project').getAll(projectId))) || [];
+  const settingRows = ((await requestValue(readTx.objectStore(SETTINGS_STORE).getAll())) || [])
+    .filter((row) => row?.projectId === projectId);
+  await transactionDone(readTx);
+
+  const writeTx = db.transaction([ASSETS_STORE, SETTINGS_STORE], 'readwrite');
+  const assetStore = writeTx.objectStore(ASSETS_STORE);
+  const settingsStore = writeTx.objectStore(SETTINGS_STORE);
+
+  for (const row of assetRows) {
+    const number = Number(row.slideNumber);
+    if (number === removed) assetStore.delete(row.id);
+    else if (number > removed) assetStore.put({ ...row, slideNumber: number - 1 });
+  }
+
+  for (const row of settingRows) {
+    const number = Number(row.slideNumber);
+    if (number >= removed) settingsStore.delete(row.key);
+  }
+  for (const row of settingRows) {
+    const number = Number(row.slideNumber);
+    if (number > removed) {
+      settingsStore.put({
+        ...row,
+        key: settingsKey(projectId, number - 1),
+        slideNumber: number - 1,
+        updatedAt: Date.now(),
+      });
+    }
+  }
+
+  await transactionDone(writeTx);
+}
