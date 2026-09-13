@@ -54,7 +54,13 @@ async function buildBackup(project) {
   };
 
   const takeManifest = takes.map((take) => {
-    const { blob, cleanedBlob, ...meta } = take;
+    const {
+      blob,
+      cleanedBlob,
+      key: _key,
+      projectId: _projectId,
+      ...meta
+    } = take;
     return {
       ...meta,
       blobRef: addBlob('take-original', blob, `slide-${take.slideNumber}-original`),
@@ -203,7 +209,7 @@ export default function ProjectBackupManager() {
       await saveProject(restoredProject);
 
       for (const take of header.takes || []) {
-        const { blobRef, cleanedBlobRef, ...meta } = take;
+        const { blobRef, cleanedBlobRef, key: _key, projectId: _projectId, ...meta } = take;
         await saveSlideTake(newProjectId, Number(take.slideNumber), {
           ...meta,
           projectId: newProjectId,
