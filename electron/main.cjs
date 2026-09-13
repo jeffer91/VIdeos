@@ -19,6 +19,8 @@ const APP_ID = 'com.jeffer91.videosstudio';
 const CHANNEL_NAME = '11 Records';
 const LIBRARY_CATEGORIES = new Set(['intros', 'transitions', 'endings', 'cta', 'memes', 'templates']);
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
+const VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.mov', '.m4v', '.avi', '.mkv']);
+const MAX_LIBRARY_READ_BYTES = 1024 * 1024 * 1024;
 
 function isTrustedRendererOrigin(value = '') {
   if (!value) return false;
@@ -225,6 +227,24 @@ function imageMimeType(filePath = '') {
   return '';
 }
 
+function mediaMimeType(filePath = '') {
+  const extension = path.extname(filePath).toLowerCase();
+  if (extension === '.mp4' || extension === '.m4v') return 'video/mp4';
+  if (extension === '.webm') return 'video/webm';
+  if (extension === '.mov') return 'video/quicktime';
+  if (extension === '.avi') return 'video/x-msvideo';
+  if (extension === '.mkv') return 'video/x-matroska';
+  return imageMimeType(filePath) || 'application/octet-stream';
+}
+
+function assertLibraryFile(target) {
+  const resolved = path.resolve(String(target || ''));
+  if (!resolved || !isInside(libraryRoot(), resolved) || resolved === path.resolve(libraryRoot())) {
+    throw new Error('Archivo fuera de la biblioteca.');
+  }
+  return resolved;
+}
+
 function configureLibraryIpc() {
   ipcMain.handle('library:import', async (event, options = {}) => {
     assertTrustedIpc(event);
@@ -307,14 +327,56 @@ function configureLibraryIpc() {
 
   ipcMain.handle('library:read-data-url', async (event, options = {}) => {
     assertTrustedIpc(event);
-    const target = path.resolve(String(options.path || ''));
-    if (!target || !isInside(libraryRoot(), target) || target === path.resolve(libraryRoot())) {
-      throw new Error('Archivo fuera de la biblioteca.');
-    }
+    const target = assertLibraryFile(options.path);
     const mimeType = imageMimeType(target);
     if (!mimeType) throw new Error('El archivo solicitado no es una imagen compatible.');
     const data = await fs.readFile(target);
     return `data:${mimeType};base64,${data.toString('base64')}`;
+  });
+
+  ipcMain.handle('library:read-bytes', async (event, options = {}) => {
+    assertTrustedIpc(event);
+    const target = assertLibraryFile(options.path);
+    const stat = await fs.stat(target);
+    if (stat.size > MAX_LIBRARY_READ_BYTES) throw new Error('El recurso es demasiado grande para incluirlo en esta operación.');
+    const data = await fs.readFile(target);
+    return {
+      name: path.basename(target),
+      type: mediaMimeType(target),
+      size: stat.size,
+      data: new Uint8Array(data),
+    };
+  });
+
+  ipcMain.handle('library:write-bytes', async (event, options = {}) => {
+    assertTrustedIpc(event);
+    const directory = libraryDirectory(options);
+    await ensureDirectory(directory);
+    const name = path.basename(String(options.name || 'recurso'));
+    const extension = path.extname(name).toLowerCase();
+    if (options.category === 'templates') {
+      if (!IMAGE_EXTENSIONS.has(extension)) throw new Error('El fondo restaurado no es una imagen compatible.');
+    } else if (!VIDEO_EXTENSIONS.has(extension)) {
+      throw new Error('El recurso restaurado no es un video compatible.');
+    }
+    const sourceName = path.join(directory, `${safeSegment(path.parse(name).name)}${extension}`);
+    const destination = await uniqueDestination(directory, sourceName);
+    const incoming = options.data;
+    const data = Buffer.from(incoming instanceof ArrayBuffer ? new Uint8Array(incoming) : incoming || []);
+    if (!data.length) throw new Error('El recurso restaurado está vacío.');
+    if (data.length > MAX_LIBRARY_READ_BYTES) throw new Error('El recurso restaurado es demasiado grande.');
+    await fs.writeFile(destination, data);
+    const stat = await fs.stat(destination);
+    return {
+      id: destination,
+      name: path.basename(destination),
+      path: destination,
+      size: stat.size,
+      modifiedAt: stat.mtimeMs,
+      category: options.category,
+      scope: options.scope || 'global',
+      projectId: options.projectId || '',
+    };
   });
 
   ipcMain.handle('library:reveal', async (event, options = {}) => {
@@ -327,10 +389,7 @@ function configureLibraryIpc() {
 
   ipcMain.handle('library:open', async (event, options = {}) => {
     assertTrustedIpc(event);
-    const target = path.resolve(String(options.path || ''));
-    if (!target || !isInside(libraryRoot(), target) || target === path.resolve(libraryRoot())) {
-      throw new Error('Archivo fuera de la biblioteca.');
-    }
+    const target = assertLibraryFile(options.path);
     const result = await shell.openPath(target);
     if (result) throw new Error(result);
     return true;
@@ -343,16 +402,20 @@ function sendUpdateStatus(payload) {
 }
 
 function configureUpdateIpc() {
-  ipcMain.handle('app:get-info', () => ({
-    name: app.getName(),
-    version: app.getVersion(),
-    channel: CHANNEL_NAME,
-    packaged: app.isPackaged,
-    updaterAvailable: Boolean(autoUpdater),
-    libraryPath: libraryRoot(),
-  }));
+  ipcMain.handle('app:get-info', (event) => {
+    assertTrustedIpc(event);
+    return {
+      name: app.getName(),
+      version: app.getVersion(),
+      channel: CHANNEL_NAME,
+      packaged: app.isPackaged,
+      updaterAvailable: Boolean(autoUpdater),
+      libraryPath: libraryRoot(),
+    };
+  });
 
-  ipcMain.handle('update:check', async () => {
+  ipcMain.handle('update:check', async (event) => {
+    assertTrustedIpc(event);
     if (!app.isPackaged) return { ok: false, reason: 'development' };
     if (!autoUpdater) return { ok: false, reason: 'updater-unavailable' };
     sendUpdateStatus({ state: 'checking' });
@@ -365,7 +428,8 @@ function configureUpdateIpc() {
     }
   });
 
-  ipcMain.handle('update:install', () => {
+  ipcMain.handle('update:install', (event) => {
+    assertTrustedIpc(event);
     if (!app.isPackaged) return { ok: false, reason: 'development' };
     if (!autoUpdater) return { ok: false, reason: 'updater-unavailable' };
     autoUpdater.quitAndInstall(false, true);
