@@ -46,6 +46,16 @@ jobs:
         run: npm run audit
       - name: Build Windows installer
         run: npm run dist:win
+      - name: Smoke test packaged app startup
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path 'release/win-unpacked/Videos Studio.exe'
+          $process = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 8
+          if ($process.HasExited) {
+            throw "Videos Studio se cerró durante la prueba de arranque. Código: $($process.ExitCode)"
+          }
+          Stop-Process -Id $process.Id -Force
       - name: Upload installer test artifact
         uses: actions/upload-artifact@v4
         with:
