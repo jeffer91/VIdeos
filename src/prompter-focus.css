@@ -1,4 +1,4 @@
-/* Modo de grabación centrado: mantiene la lectura lo más cerca posible del lente. */
+/* Teleprompter centrado: lectura cerca del lente y grabación sin distracciones. */
 .recording-production-grid {
   position: relative;
   grid-template-columns: minmax(0, 1fr) !important;
@@ -21,20 +21,20 @@
   z-index: 5;
   align-self: start;
   justify-self: center;
-  width: min(920px, 68%);
+  width: min(860px, 62%);
   max-width: calc(100% - 34px);
   min-height: 0;
-  margin-top: 46px;
-  padding: 8px 10px 10px;
+  margin-top: 34px;
+  padding: 7px 9px 9px;
   display: grid;
   grid-template-columns: auto minmax(180px, 1fr) auto;
-  grid-template-rows: auto minmax(126px, 176px);
-  gap: 7px 10px;
-  border: 1px solid rgba(148, 163, 184, 0.7) !important;
-  border-radius: 14px !important;
+  grid-template-rows: auto minmax(108px, 136px);
+  gap: 6px 9px;
+  border: 1px solid rgba(148, 163, 184, 0.55) !important;
+  border-radius: 13px !important;
   background: rgba(255, 255, 255, 0.94) !important;
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.16) !important;
-  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.13) !important;
+  backdrop-filter: blur(12px);
   overflow: visible !important;
 }
 
@@ -42,17 +42,17 @@
   content: '●  MIRA A CÁMARA';
   position: absolute;
   left: 50%;
-  top: -24px;
+  top: -22px;
   transform: translateX(-50%);
-  padding: 4px 9px;
+  padding: 3px 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.96);
   color: #2563eb;
   font-size: 8px;
   font-weight: 850;
   letter-spacing: .08em;
   white-space: nowrap;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.10);
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
 }
 
 .prompter-toolbar {
@@ -81,25 +81,36 @@
   grid-column: 3;
   grid-row: 1;
   align-self: center;
-  min-width: 170px;
+  min-width: 86px;
+}
+
+/* El único inicio real es GRABAR: startRecording ya pone en marcha también el prompter. */
+.prompter-actions .primary-button {
+  display: none !important;
+}
+
+.prompter-actions .secondary-button {
+  width: 100%;
 }
 
 .prompter-reading {
+  position: relative;
   grid-column: 1 / -1;
   grid-row: 2;
   min-height: 0;
-  max-height: 176px;
+  max-height: 136px;
   overflow-y: auto;
-  padding: 18px 46px 92px !important;
+  padding: 14px 38px 66px !important;
   border: 0 !important;
-  border-radius: 10px !important;
-  background: rgba(255, 255, 255, 0.98) !important;
-  line-height: 1.48;
+  border-radius: 9px !important;
+  background: rgba(255, 255, 255, 0.985) !important;
+  line-height: 1.42;
   scroll-behavior: auto;
+  box-shadow: inset 0 1px 0 rgba(37, 99, 235, 0.08);
 }
 
 .prompter-reading pre {
-  width: min(720px, 100%);
+  width: min(650px, 100%);
   margin: 0 auto !important;
   white-space: pre-wrap;
   text-align: left;
@@ -107,20 +118,47 @@
   color: var(--vs-text, #17212b) !important;
 }
 
-/* Mientras se graba, quitamos distracciones y acercamos todavía más la lectura al lente. */
+.record-actions .record-button {
+  min-width: 116px;
+  justify-content: center;
+  font-weight: 800;
+}
+
+/* Avisos de grabación: pequeños y fuera de la zona principal. */
+.production-app:has(.recording-flow) .toast {
+  top: 72px !important;
+  right: 16px !important;
+  bottom: auto !important;
+  width: min(330px, calc(100vw - 32px)) !important;
+  padding: 8px 10px !important;
+  gap: 8px !important;
+  font-size: 10px !important;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12) !important;
+}
+
+/* Mientras se graba o está en pausa, se oculta todo lo que no ayuda a leer y controlar la toma. */
 .recording-flow:has(.status-recording),
 .recording-flow:has(.status-paused) {
   grid-template-rows: auto minmax(0, 1fr) !important;
 }
 
 .recording-flow:has(.status-recording) .slide-mini-rail,
-.recording-flow:has(.status-paused) .slide-mini-rail {
-  display: none;
+.recording-flow:has(.status-paused) .slide-mini-rail,
+.recording-flow:has(.status-recording) .recording-topline,
+.recording-flow:has(.status-paused) .recording-topline,
+.recording-flow:has(.status-recording) .capture-meta,
+.recording-flow:has(.status-paused) .capture-meta {
+  display: none !important;
 }
 
 .recording-flow:has(.status-recording) .slide-flow-header,
 .recording-flow:has(.status-paused) .slide-flow-header {
-  min-height: 30px;
+  min-height: 28px;
+}
+
+.recording-flow:has(.status-recording) .slide-flow-header > button,
+.recording-flow:has(.status-paused) .slide-flow-header > button {
+  visibility: hidden;
 }
 
 .recording-flow:has(.status-recording) .slide-flow-header h1,
@@ -128,31 +166,47 @@
   font-size: 12px;
 }
 
-.recording-flow:has(.status-recording) .recording-topline,
-.recording-flow:has(.status-paused) .recording-topline {
-  display: none;
-}
-
 .recording-flow:has(.status-recording) .camera-production-card,
 .recording-flow:has(.status-paused) .camera-production-card {
-  grid-template-rows: minmax(0, 1fr) auto auto !important;
+  grid-template-rows: minmax(0, 1fr) auto !important;
 }
 
 .recording-flow:has(.status-recording) .prompter-production-card,
 .recording-flow:has(.status-paused) .prompter-production-card {
-  width: min(960px, 74%);
-  margin-top: 8px;
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.20) !important;
+  width: min(820px, 60%);
+  margin-top: 4px;
+  padding: 7px 9px 8px;
+  grid-template-columns: 1fr;
+  grid-template-rows: minmax(108px, 126px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.15) !important;
+}
+
+.recording-flow:has(.status-recording) .prompter-toolbar,
+.recording-flow:has(.status-paused) .prompter-toolbar,
+.recording-flow:has(.status-recording) .speed-control,
+.recording-flow:has(.status-paused) .speed-control,
+.recording-flow:has(.status-recording) .prompter-actions,
+.recording-flow:has(.status-paused) .prompter-actions {
+  display: none !important;
 }
 
 .recording-flow:has(.status-recording) .prompter-reading,
 .recording-flow:has(.status-paused) .prompter-reading {
-  max-height: 164px;
+  grid-column: 1;
+  grid-row: 1;
+  max-height: 126px;
+  padding: 12px 34px 58px !important;
+  border-radius: 9px !important;
 }
 
-/* En revisión de una toma, el prompter deja de tapar el video grabado. */
+.recording-flow:has(.status-recording) .recording-bottom,
+.recording-flow:has(.status-paused) .recording-bottom {
+  grid-template-columns: minmax(150px, 1fr) auto minmax(210px, 1fr);
+}
+
+/* En revisión de una toma el video vuelve a ser protagonista. */
 .recording-flow:has(.status-stopped) .prompter-production-card {
-  opacity: .18;
+  opacity: .10;
   pointer-events: none;
 }
 
@@ -160,15 +214,13 @@
   .prompter-production-card,
   .recording-flow:has(.status-recording) .prompter-production-card,
   .recording-flow:has(.status-paused) .prompter-production-card {
-    width: min(860px, 86%);
+    width: min(760px, 84%);
   }
 
-  .prompter-reading {
-    padding-left: 28px !important;
-    padding-right: 28px !important;
-  }
-
-  .prompter-actions {
-    min-width: 145px;
+  .prompter-reading,
+  .recording-flow:has(.status-recording) .prompter-reading,
+  .recording-flow:has(.status-paused) .prompter-reading {
+    padding-left: 24px !important;
+    padding-right: 24px !important;
   }
 }
