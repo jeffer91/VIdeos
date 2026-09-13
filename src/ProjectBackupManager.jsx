@@ -18,6 +18,8 @@ import {
 import './project-backup.css';
 
 const MAGIC = 'VIDEOSSTUDIO_BACKUP_V1';
+const INHERIT = '__inherit__';
+const NONE = '__none__';
 
 function formatBytes(bytes = 0) {
   if (!bytes) return '0 MB';
@@ -40,8 +42,69 @@ function uniqueId(base = 'project') {
   return globalThis.crypto?.randomUUID?.() || `${base}-restored-${Date.now()}`;
 }
 
+function resolveChoice(value, fallback = '') {
+  if (value === NONE) return '';
+  if (!value || value === INHERIT) return fallback || '';
+  return value;
+}
+
+function isActiveCta(cta = '') {
+  const normalized = String(cta).toUpperCase();
+  return !!normalized && !/TIPO\s*:\s*NINGUNO/.test(normalized) && normalized.trim() !== 'NINGUNO';
+}
+
+function buildResolvedAssignments(project, defaults, templatePreferences) {
+  const plan = project.productionPlan || {};
+  const transitionDefault = resolveChoice(plan.transitionDefault, defaults.transitions || '');
+  const transitions = {};
+  const ctaAssets = {};
+  for (const slide of project.slides || []) {
+    transitions[slide.number] = resolveChoice(plan.transitions?.[slide.number], transitionDefault);
+    if (isActiveCta(slide.cta)) {
+      ctaAssets[slide.number] = resolveChoice(plan.ctaAssets?.[slide.number], defaults.cta || '');
+    }
+  }
+  return {
+    intro: resolveChoice(plan.intro, defaults.intros || ''),
+    ending: resolveChoice(plan.ending, defaults.endings || ''),
+    transitionDefault,
+    transitions,
+    ctaAssets,
+    templates: {
+      defaultPath: templatePreferences?.defaultPath || '',
+      perSlide: { ...(templatePreferences?.perSlide || {}) },
+    },
+  };
+}
+
+function collectPortableResources(project, assignments) {
+  const resources = new Map();
+  const add = (category, path) => {
+    if (!path) return;
+    resources.set(`${category}:${path}`, { category, path });
+  };
+  add('intros', assignments.intro);
+  add('endings', assignments.ending);
+  add('transitions', assignments.transitionDefault);
+  Object.values(assignments.transitions || {}).forEach((path) => add('transitions', path));
+  Object.values(assignments.ctaAssets || {}).forEach((path) => add('cta', path));
+  (project.productionPlan?.memes || []).forEach((item) => add('memes', item.assetPath));
+  add('templates', assignments.templates?.defaultPath);
+  Object.values(assignments.templates?.perSlide || {}).forEach((path) => add('templates', path));
+  return [...resources.values()];
+}
+
 async function buildBackup(project) {
-  const takes = await getProjectTakes(project.id);
+  const api = window.videosStudio?.library;
+  if (!api?.getDefaults || !api?.readBytes) {
+    throw new Error('El respaldo portable necesita ejecutarse desde la aplicación de escritorio actualizada.');
+  }
+
+  const [takes, defaults, templatePreferences] = await Promise.all([
+    getProjectTakes(project.id),
+    api.getDefaults(),
+    getTemplatePreferences(project.id),
+  ]);
   const entries = [];
   const payloads = [];
 
@@ -87,16 +150,37 @@ async function buildBackup(project) {
     }
   }
 
-  const templatePreferences = await getTemplatePreferences(project.id);
+  const resolvedAssignments = buildResolvedAssignments(project, defaults || {}, templatePreferences);
+  const portableResources = [];
+  for (const resource of collectPortableResources(project, resolvedAssignments)) {
+    let item;
+    try {
+      item = await api.readBytes({ path: resource.path });
+    } catch (caught) {
+      throw new Error(`No se pudo incluir un recurso usado por el proyecto: ${resource.path}. ${caught?.message || ''}`.trim());
+    }
+    const data = item?.data;
+    const blob = data ? new Blob([data], { type: item.type || 'application/octet-stream' }) : null;
+    if (!blob?.size) throw new Error(`El recurso ${resource.path} está vacío o no se pudo leer.`);
+    portableResources.push({
+      category: resource.category,
+      originalPath: resource.path,
+      name: item.name || safeFileName(resource.path),
+      blobRef: addBlob(`library-${resource.category}`, blob, item.name || resource.path),
+    });
+  }
+
   const header = {
     format: MAGIC,
-    version: 1,
+    version: 2,
     createdAt: new Date().toISOString(),
     project,
     takes: takeManifest,
     visuals: visualManifest,
     visualSettings,
     templatePreferences,
+    resolvedAssignments,
+    portableResources,
     entries,
   };
   const headerBytes = new TextEncoder().encode(JSON.stringify(header));
@@ -117,7 +201,7 @@ async function parseBackup(file) {
   const headerStart = secondBreak + 1;
   const headerEnd = headerStart + headerLength;
   const header = JSON.parse(await file.slice(headerStart, headerEnd).text());
-  if (header?.format !== MAGIC || header?.version !== 1 || !header?.project?.slides) {
+  if (header?.format !== MAGIC || ![1, 2].includes(Number(header?.version)) || !header?.project?.slides) {
     throw new Error('Versión de respaldo no compatible.');
   }
 
@@ -142,6 +226,38 @@ async function parseBackup(file) {
   };
 
   return { header, getBlob };
+}
+
+function mappedPath(pathMap, originalPath) {
+  return originalPath ? (pathMap.get(originalPath) || originalPath) : '';
+}
+
+function applyPortableAssignments(project, assignments, pathMap) {
+  if (!assignments) return project;
+  const plan = project.productionPlan || {};
+  const transitions = {};
+  for (const [number, path] of Object.entries(assignments.transitions || {})) {
+    transitions[number] = mappedPath(pathMap, path) || NONE;
+  }
+  const ctaAssets = {};
+  for (const [number, path] of Object.entries(assignments.ctaAssets || {})) {
+    if (path) ctaAssets[number] = mappedPath(pathMap, path);
+  }
+  return {
+    ...project,
+    productionPlan: {
+      ...plan,
+      intro: mappedPath(pathMap, assignments.intro) || NONE,
+      ending: mappedPath(pathMap, assignments.ending) || NONE,
+      transitionDefault: mappedPath(pathMap, assignments.transitionDefault) || NONE,
+      transitions,
+      ctaAssets,
+      memes: (plan.memes || []).map((item) => ({
+        ...item,
+        assetPath: mappedPath(pathMap, item.assetPath),
+      })),
+    },
+  };
 }
 
 export default function ProjectBackupManager() {
@@ -169,7 +285,7 @@ export default function ProjectBackupManager() {
   async function exportBackup() {
     if (busy) return;
     setBusy(true);
-    setMessage('Preparando respaldo…');
+    setMessage('Preparando respaldo portable…');
     try {
       const project = await getActiveProject();
       if (!project?.id) throw new Error('No hay un proyecto activo para respaldar.');
@@ -182,7 +298,7 @@ export default function ProjectBackupManager() {
       link.click();
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1500);
-      setMessage(`Respaldo creado · ${formatBytes(blob.size)}. Incluye proyecto, tomas, cortes e imágenes.`);
+      setMessage(`Respaldo portable creado · ${formatBytes(blob.size)}. Incluye proyecto, tomas, cortes, imágenes y recursos de Biblioteca usados.`);
     } catch (caught) {
       console.error(caught);
       setMessage(caught?.message || 'No se pudo crear el respaldo.');
@@ -200,12 +316,33 @@ export default function ProjectBackupManager() {
     try {
       const { header, getBlob } = await parseBackup(file);
       const newProjectId = uniqueId(header.project.id);
-      const restoredProject = {
+      const api = window.videosStudio?.library;
+      const pathMap = new Map();
+
+      if ((header.portableResources || []).length) {
+        if (!api?.writeBytes) throw new Error('Este respaldo portable requiere una versión actualizada de Videos Studio.');
+        setMessage('Restaurando recursos de Biblioteca…');
+        for (const resource of header.portableResources) {
+          const blob = getBlob(resource.blobRef);
+          if (!blob?.size) throw new Error(`Falta el recurso portable ${resource.name || resource.originalPath}.`);
+          const item = await api.writeBytes({
+            scope: resource.category === 'templates' ? 'global' : 'project',
+            projectId: resource.category === 'templates' ? '' : newProjectId,
+            category: resource.category,
+            name: resource.name,
+            data: new Uint8Array(await blob.arrayBuffer()),
+          });
+          if (item?.path) pathMap.set(resource.originalPath, item.path);
+        }
+      }
+
+      let restoredProject = {
         ...header.project,
         id: newProjectId,
         name: `${header.project.name || 'Proyecto'} (restaurado)`,
         updatedAt: Date.now(),
       };
+      restoredProject = applyPortableAssignments(restoredProject, header.resolvedAssignments, pathMap);
       await saveProject(restoredProject);
 
       for (const take of header.takes || []) {
@@ -227,8 +364,15 @@ export default function ProjectBackupManager() {
       for (const [slideNumber, settings] of Object.entries(header.visualSettings || {})) {
         await setVisualSettings(newProjectId, Number(slideNumber), settings);
       }
-      if (header.templatePreferences) {
-        await setTemplatePreferences(newProjectId, header.templatePreferences);
+
+      const sourcePreferences = header.resolvedAssignments?.templates || header.templatePreferences;
+      if (sourcePreferences) {
+        await setTemplatePreferences(newProjectId, {
+          defaultPath: mappedPath(pathMap, sourcePreferences.defaultPath),
+          perSlide: Object.fromEntries(
+            Object.entries(sourcePreferences.perSlide || {}).map(([number, path]) => [number, mappedPath(pathMap, path)]),
+          ),
+        });
       }
       await setActiveProject(newProjectId);
       setMessage('Respaldo restaurado. Abriendo el proyecto…');
@@ -253,8 +397,8 @@ export default function ProjectBackupManager() {
         <header>
           <div>
             <span className="eyebrow">SEGURIDAD DEL PROYECTO</span>
-            <h2>Respaldo</h2>
-            <p>Guarda una copia transportable del proyecto antes de continuar con ediciones grandes.</p>
+            <h2>Respaldo portable</h2>
+            <p>Guarda una copia transportable del proyecto, incluidas las piezas de Biblioteca que realmente utiliza.</p>
           </div>
           <button onClick={() => setOpen(false)} disabled={busy} aria-label="Cerrar">×</button>
         </header>
@@ -275,7 +419,7 @@ export default function ProjectBackupManager() {
           </label>
         </div>
 
-        <small className="backup-note">El respaldo incluye guion, estado del proyecto, grabaciones, cortes e imágenes cargadas. Los videos globales de Biblioteca permanecen en la carpeta local de Videos Studio y no se duplican dentro del respaldo.</small>
+        <small className="backup-note">Incluye guion, estado, grabaciones originales, cortes, imágenes y los intros/transiciones/endings/CTA/memes/fondos que estén asignados al proyecto. Los respaldos antiguos versión 1 siguen siendo compatibles.</small>
         {message && <div className="backup-message">{message}</div>}
       </section>
     </div>,
