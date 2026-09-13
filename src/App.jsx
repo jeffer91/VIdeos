@@ -6,6 +6,8 @@ import ProjectManager from './ProjectManager';
 import ProjectBackupManager from './ProjectBackupManager';
 import FinalRenderManager from './FinalRenderManager';
 import SlideEditorManager from './SlideEditorManager';
+import RecordingViewEnhancer from './RecordingViewEnhancer';
+import CutStudioEnhancer from './CutStudioEnhancer';
 import IntegrityGuard from './IntegrityGuard';
 import UpdateEnhancer from './UpdateEnhancer';
 import './branding.css';
@@ -21,6 +23,8 @@ export default function App() {
       <ProjectBackupManager />
       <FinalRenderManager />
       <SlideEditorManager />
+      <RecordingViewEnhancer />
+      <CutStudioEnhancer />
       <IntegrityGuard />
       <UpdateEnhancer />
     </>
