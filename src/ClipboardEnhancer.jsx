@@ -49,6 +49,18 @@ async function copyPromptReliably() {
   throw new Error('El portapapeles no está disponible.');
 }
 
+function downloadPrompt() {
+  const blob = new Blob([`\uFEFF${AI_FORMAT_RULES}`], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'prompt-maestro-11-records-videos-studio.txt';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 800);
+}
+
 function relabelPromptButtons() {
   document.querySelectorAll('button').forEach((button) => {
     const label = button.textContent.trim();
@@ -76,7 +88,21 @@ export default function ClipboardEnhancer() {
 
     const handler = async (event) => {
       const button = event.target?.closest?.('button');
-      if (!button || !['Copiar prompt IA', 'Copiar reglas IA'].includes(button.textContent.trim())) return;
+      if (!button) return;
+      const label = button.textContent.trim();
+
+      if (['Descargar prompt', 'Descargar reglas'].includes(label)) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+        downloadPrompt();
+        setNotice({ type: 'success', text: 'Prompt maestro descargado. Pégalo en ChatGPT y agrega después el tema del video.' });
+        window.clearTimeout(noticeTimer);
+        noticeTimer = window.setTimeout(() => setNotice(null), 3600);
+        return;
+      }
+
+      if (!['Copiar prompt IA', 'Copiar reglas IA'].includes(label)) return;
 
       event.preventDefault();
       event.stopPropagation();
