@@ -73,7 +73,7 @@ export default function ClipboardEnhancer() {
         button.textContent = '✓ Reglas copiadas';
         setNotice({
           type: 'success',
-          text: 'Reglas de 11 Records copiadas. Ya puedes pegarlas en ChatGPT.',
+          text: 'Reglas de 11 Records copiadas. Pégalas en ChatGPT; en “Contenido fuente” pega solo el guion que ChatGPT genere.',
         });
       } catch (caught) {
         console.error(caught);
@@ -91,7 +91,7 @@ export default function ClipboardEnhancer() {
             button.textContent = originalLabel;
           }
         }, 1700);
-        noticeTimer = window.setTimeout(() => setNotice(null), 3200);
+        noticeTimer = window.setTimeout(() => setNotice(null), 4200);
       }
     };
 
@@ -116,7 +116,7 @@ export default function ClipboardEnhancer() {
         display: 'flex',
         alignItems: 'center',
         gap: 10,
-        maxWidth: 390,
+        maxWidth: 430,
         padding: '11px 14px',
         border: `1px solid ${notice.type === 'success' ? '#b7e5ca' : '#f1bdc4'}`,
         borderRadius: 12,
