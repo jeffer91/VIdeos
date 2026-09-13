@@ -1,7 +1,13 @@
 const { app, BrowserWindow, session, ipcMain, dialog, shell, clipboard } = require('electron');
-const { autoUpdater } = require('electron-updater');
 const path = require('node:path');
 const fs = require('node:fs/promises');
+
+let autoUpdater = null;
+try {
+  ({ autoUpdater } = require('electron-updater'));
+} catch (caught) {
+  console.warn('electron-updater no está disponible. Videos Studio continuará sin actualizaciones automáticas en esta ejecución.', caught?.message || caught);
+}
 
 let mainWindow = null;
 let viteServer = null;
@@ -318,11 +324,13 @@ function configureUpdateIpc() {
     version: app.getVersion(),
     channel: CHANNEL_NAME,
     packaged: app.isPackaged,
+    updaterAvailable: Boolean(autoUpdater),
     libraryPath: libraryRoot(),
   }));
 
   ipcMain.handle('update:check', async () => {
     if (!app.isPackaged) return { ok: false, reason: 'development' };
+    if (!autoUpdater) return { ok: false, reason: 'updater-unavailable' };
     sendUpdateStatus({ state: 'checking' });
     try {
       const result = await autoUpdater.checkForUpdates();
@@ -335,13 +343,14 @@ function configureUpdateIpc() {
 
   ipcMain.handle('update:install', () => {
     if (!app.isPackaged) return { ok: false, reason: 'development' };
+    if (!autoUpdater) return { ok: false, reason: 'updater-unavailable' };
     autoUpdater.quitAndInstall(false, true);
     return { ok: true };
   });
 }
 
 function configureAutoUpdater() {
-  if (!app.isPackaged) return;
+  if (!app.isPackaged || !autoUpdater) return;
 
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
