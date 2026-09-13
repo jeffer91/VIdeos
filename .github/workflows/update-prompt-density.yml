@@ -1,0 +1,63 @@
+name: Strengthen factual-density prompt once
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'Strengthen prompt factual density'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Update prompt
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const file = 'src/parser.js';
+          let source = fs.readFileSync(file, 'utf8');
+
+          const beforeA = `- No inventes cifras, fechas, edades, goles, asistencias, partidos, récords ni declaraciones.\n- Si un dato no está suficientemente confirmado, no lo presentes como un hecho.`;
+          const afterA = `- No inventes absolutamente nada: ni cifras, fechas, edades, goles, asistencias, partidos, récords, declaraciones, comparaciones, contexto ni causas.\n- Todo dato presentado debe ser concreto, relevante y verificable.\n- Si un dato no está suficientemente confirmado, no lo presentes como un hecho.\n- Si no hay suficientes datos verificados para sostener muchas diapositivas, crea menos diapositivas. Nunca rellenes espacios inventando, suponiendo o reformulando la misma información.`;
+          if (!source.includes(beforeA)) throw new Error('No se encontró el bloque de verificación del prompt.');
+          source = source.replace(beforeA, afterA);
+
+          const beforeB = `- Cada diapositiva debe aportar información nueva.\n- MUY IMPORTANTE: no repitas contenido entre diapositivas. Si un dato, cifra, comparación o explicación ya apareció, no lo vuelvas a presentar en otra diapositiva salvo que sea imprescindible para entender una idea nueva; en ese caso, no lo copies literalmente y aporta información adicional.\n- Evita repetir el mismo dato sin aportar contexto adicional.`;
+          const afterB = `- Cada diapositiva debe aportar información nueva y útil.\n- Prioriza una alta densidad informativa: incluye muchos datos importantes, cifras, fechas, antecedentes, comparaciones y contexto relevante siempre que estén verificados y realmente ayuden a entender el récord o la historia.\n- No uses relleno, frases vacías, opiniones genéricas ni texto creado solo para alargar el video.\n- MUY IMPORTANTE: no repitas contenido entre diapositivas. Si un dato, cifra, comparación o explicación ya apareció, no lo vuelvas a presentar en otra diapositiva salvo que sea imprescindible para entender una idea nueva; en ese caso, no lo copies literalmente y aporta información adicional.\n- Evita repetir el mismo dato sin aportar contexto adicional.`;
+          if (!source.includes(beforeB)) throw new Error('No se encontró el bloque de densidad del prompt.');
+          source = source.replace(beforeB, afterB);
+
+          const beforeC = `- CUERPO: usa normalmente 2 a 4 ideas principales. Si necesitas más, continúa con CUERPO_4, CUERPO_5, etc.\n- CONTENIDO: usa normalmente 2 a 4 datos complementarios. Si necesitas más, continúa con CONTENIDO_4, CONTENIDO_5, etc.`;
+          const afterC = `- CUERPO: incluye las ideas principales necesarias para resumir bien la diapositiva. Prioriza información útil sobre cantidad fija; si hay más datos importantes, continúa con CUERPO_4, CUERPO_5, etc.\n- CONTENIDO: incluye todos los datos complementarios importantes y verificados que aporten valor: cifras, fechas, marcas anteriores, diferencias, contexto, antecedentes o comparaciones. Puedes continuar con CONTENIDO_4, CONTENIDO_5, etc. No agregues datos solo para llenar espacio.`;
+          if (!source.includes(beforeC)) throw new Error('No se encontró el bloque CUERPO/CONTENIDO del prompt.');
+          source = source.replace(beforeC, afterC);
+
+          fs.writeFileSync(file, source, 'utf8');
+          NODE
+
+      - name: Verify prompt
+        shell: bash
+        run: |
+          grep -F "No inventes absolutamente nada" src/parser.js
+          grep -F "alta densidad informativa" src/parser.js
+          grep -F "No uses relleno" src/parser.js
+          grep -F "Si no hay suficientes datos verificados" src/parser.js
+          grep -F "Copiar prompt IA" src/ProductionApp.jsx
+          if grep -F "Copiar reglas IA" src/ProductionApp.jsx; then exit 1; fi
+
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/parser.js
+          git commit -m "Make prompt dense and verification-first"
+          git push origin main
