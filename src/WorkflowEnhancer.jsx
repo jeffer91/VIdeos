@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getActiveProject, getProjectTakes, saveProject } from './storage';
+import { getActiveProject, getProjectTakeMetadata, saveProject } from './storage';
 import { getVisualCountsBySlide } from './visualStore';
 
 const NAV_KEYS = ['content', 'recording', 'cut', 'library', 'join', 'memes', 'result'];
@@ -50,7 +50,7 @@ export default function WorkflowEnhancer() {
       return;
     }
     const [rows, counts] = await Promise.all([
-      getProjectTakes(active.id),
+      getProjectTakeMetadata(active.id),
       getVisualCountsBySlide(active.id),
     ]);
     setTakes(rows || []);
@@ -94,7 +94,7 @@ export default function WorkflowEnhancer() {
     const total = slides.length;
     const takeMap = Object.fromEntries(takes.map((take) => [Number(take.slideNumber), take]));
     const accepted = slides.filter((slide) => takeMap[slide.number]?.accepted).length;
-    const cleaned = slides.filter((slide) => takeMap[slide.number]?.cleanedBlob).length;
+    const cleaned = slides.filter((slide) => takeMap[slide.number]?.hasCleanedBlob).length;
     const mounted = slides.filter((slide) => project?.productionPlan?.scenes?.[slide.number]?.ready).length;
     const visuals = slides.filter((slide) => (visualCounts[slide.number] || 0) > 0).length;
     const memes = project?.productionPlan?.memes?.length || 0;
@@ -137,7 +137,7 @@ export default function WorkflowEnhancer() {
       button.classList.toggle('workflow-done', ready);
       const small = button.querySelector('small');
       if (small) {
-        const cleanLabel = stats.takeMap[slideNumber]?.cleanedBlob ? 'Video limpio ✓' : 'Falta corte';
+        const cleanLabel = stats.takeMap[slideNumber]?.hasCleanedBlob ? 'Video limpio ✓' : 'Falta corte';
         const visualLabel = count ? `Visual ${count} img ✓` : 'Falta imagen';
         small.textContent = `${cleanLabel} · ${visualLabel}`;
       }
@@ -197,7 +197,7 @@ export default function WorkflowEnhancer() {
       }
 
       const take = stats.takeMap[slideNumber];
-      if (!take?.cleanedBlob) {
+      if (!take?.hasCleanedBlob) {
         setBridgeNotice({ type: 'error', text: 'Primero guarda el corte limpio de esta diapositiva.' });
         return;
       }
@@ -263,13 +263,13 @@ export default function WorkflowEnhancer() {
   function goNextPending() {
     if (!project) return;
     if (view === 'cut') {
-      const index = stats.slides.findIndex((slide) => stats.takeMap[slide.number]?.accepted && !stats.takeMap[slide.number]?.cleanedBlob);
+      const index = stats.slides.findIndex((slide) => stats.takeMap[slide.number]?.accepted && !stats.takeMap[slide.number]?.hasCleanedBlob);
       if (index >= 0) document.querySelectorAll('.cut-list button')[index]?.click();
       return;
     }
     if (view === 'join') {
       const index = stats.slides.findIndex((slide) => {
-        const hasClean = Boolean(stats.takeMap[slide.number]?.cleanedBlob);
+        const hasClean = Boolean(stats.takeMap[slide.number]?.hasCleanedBlob);
         const hasVisual = (visualCounts[slide.number] || 0) > 0;
         const mounted = Boolean(project.productionPlan?.scenes?.[slide.number]?.ready);
         return hasClean && (!hasVisual || !mounted);
