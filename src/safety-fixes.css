@@ -1,0 +1,37 @@
+.recovery-banner {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+}
+
+.recovery-banner > span {
+  flex: 1 1 320px;
+}
+
+.recovery-discard-button {
+  border: 1px solid #f0b8b8;
+  border-radius: 8px;
+  background: #fff7f7;
+  color: #a52a2a;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.project-list-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.project-delete-button {
+  border-color: #efcaca !important;
+  background: #fffafa !important;
+  color: #a83333 !important;
+}
+
+.project-delete-button:hover:not(:disabled) {
+  border-color: #dc8f8f !important;
+  background: #fff2f2 !important;
+}
