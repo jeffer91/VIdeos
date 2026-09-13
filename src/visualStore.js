@@ -208,3 +208,21 @@ export async function removeVisualSlideAndShift(projectId, removedSlideNumber) {
 
   await transactionDone(writeTx);
 }
+
+export async function deleteProjectVisualData(projectId) {
+  if (!projectId) return;
+  const db = await openVisualDb();
+  const readTx = db.transaction([ASSETS_STORE, SETTINGS_STORE], 'readonly');
+  const assetRows = (await requestValue(readTx.objectStore(ASSETS_STORE).index('by_project').getAll(projectId))) || [];
+  const settingRows = ((await requestValue(readTx.objectStore(SETTINGS_STORE).getAll())) || [])
+    .filter((row) => row?.projectId === projectId);
+  await transactionDone(readTx);
+
+  if (!assetRows.length && !settingRows.length) return;
+  const writeTx = db.transaction([ASSETS_STORE, SETTINGS_STORE], 'readwrite');
+  const assetStore = writeTx.objectStore(ASSETS_STORE);
+  const settingsStore = writeTx.objectStore(SETTINGS_STORE);
+  assetRows.forEach((row) => assetStore.delete(row.id));
+  settingRows.forEach((row) => settingsStore.delete(row.key));
+  await transactionDone(writeTx);
+}
