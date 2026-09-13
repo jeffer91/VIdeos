@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  clearRecordingData,
   deleteSlideTake,
   getActiveProject,
   getChunks,
@@ -9,6 +10,7 @@ import {
   getTemplatePreferences,
   saveProject,
   saveSlideTake,
+  setRecordingMeta,
   setTemplatePreferences,
 } from './storage';
 import { removeVisualSlideAndShift } from './visualStore';
@@ -180,10 +182,44 @@ function remapTemplatePreferences(preferences = {}, removedNumber) {
   return { ...preferences, perSlide };
 }
 
-async function assertNoRecoverableRecording(projectId) {
+async function getRecoverableRecording(projectId) {
   const [meta, chunks] = await Promise.all([getRecordingMeta(), getChunks()]);
-  if (meta?.projectId === projectId && chunks?.length) {
-    throw new Error('Hay una grabación interrumpida recuperable. Recupérala o descártala antes de editar la estructura del video.');
+  if (meta?.projectId !== projectId || !chunks?.length) return null;
+  return { meta, chunks };
+}
+
+async function prepareRecoveryForEdit(projectId, targetSlideNumber, readingChanged) {
+  if (!readingChanged) return true;
+  const recovery = await getRecoverableRecording(projectId);
+  if (!recovery || Number(recovery.meta.slideNumber) !== Number(targetSlideNumber)) return true;
+
+  const confirmed = window.confirm(
+    `Hay una grabación interrumpida recuperable de la diapositiva ${targetSlideNumber}.\n\nComo cambiaste la LECTURA, esa grabación ya no coincide con el nuevo texto y se descartará. ¿Guardar los cambios?`,
+  );
+  if (!confirmed) return false;
+  await clearRecordingData();
+  return true;
+}
+
+async function prepareRecoveryForDeletion(projectId, removedNumber) {
+  const recovery = await getRecoverableRecording(projectId);
+  if (!recovery) return;
+
+  const recoverySlide = Number(recovery.meta.slideNumber);
+  if (!Number.isFinite(recoverySlide)) {
+    await clearRecordingData();
+    return;
+  }
+
+  if (recoverySlide === Number(removedNumber)) {
+    // La confirmación de eliminar ya incluye la grabación de esta diapositiva.
+    await clearRecordingData();
+    return;
+  }
+
+  if (recoverySlide > Number(removedNumber)) {
+    const { key: _key, ...meta } = recovery.meta;
+    await setRecordingMeta({ ...meta, slideNumber: recoverySlide - 1 });
   }
 }
 
@@ -250,9 +286,14 @@ export default function SlideEditorManager() {
     setBusy(true);
     setError('');
     try {
-      await assertNoRecoverableRecording(project.id);
       const nextSlide = normalizedSlide(slide, draft);
       const readingChanged = !sameField(slide, nextSlide, 'reading');
+      const canContinue = await prepareRecoveryForEdit(project.id, slide.number, readingChanged);
+      if (!canContinue) {
+        setBusy(false);
+        return;
+      }
+
       const ctaChanged = !sameField(slide, nextSlide, 'cta');
       const sceneChanged = ['title', 'body', 'content', 'visual', 'cta'].some((field) => !sameField(slide, nextSlide, field));
       const nextSlides = project.slides.map((item) => Number(item.number) === Number(slide.number) ? nextSlide : item);
@@ -320,7 +361,7 @@ export default function SlideEditorManager() {
     setBusy(true);
     setError('');
     try {
-      await assertNoRecoverableRecording(active.id);
+      await prepareRecoveryForDeletion(active.id, number);
       const [takes, preferences] = await Promise.all([
         getProjectTakes(active.id),
         getTemplatePreferences(active.id),
