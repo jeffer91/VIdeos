@@ -16,6 +16,8 @@
     "audit": "node scripts/audit-workflow.mjs && node scripts/audit-project-lifecycle.mjs && node scripts/audit-clipboard.mjs && node scripts/audit-integrity.mjs",
     "test": "npm run audit",
     "preview": "vite preview --host 127.0.0.1",
+    "dist:win": "npm run build && electron-builder --win nsis",
+    "release:win": "npm run build && electron-builder --win nsis --publish always",
     "postinstall": "node scripts/copy-ffmpeg.mjs"
   },
   "allowScripts": {
@@ -26,12 +28,56 @@
     "@ffmpeg/core": "0.12.10",
     "@ffmpeg/ffmpeg": "0.12.15",
     "@ffmpeg/util": "0.12.2",
+    "electron-updater": "6.6.2",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "4.3.4",
     "electron": "44.3.0",
+    "electron-builder": "26.0.12",
     "vite": "6.4.3"
+  },
+  "build": {
+    "appId": "com.jeffer91.videosstudio",
+    "productName": "Videos Studio",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "build/icon.ico",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "Videos-Studio-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Videos Studio",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "jeffer91",
+        "repo": "VIdeos",
+        "releaseType": "release"
+      }
+    ]
   }
 }
