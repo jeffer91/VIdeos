@@ -17,18 +17,6 @@ function legacyCopy(text) {
   return copied;
 }
 
-function downloadPrompt() {
-  const blob = new Blob([`\uFEFF${AI_FORMAT_RULES}`], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'prompt-11-records-videos-studio.txt';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 800);
-}
-
 async function tryNativeCopy(text) {
   const nativeWriter = window.videosStudio?.clipboard?.writeText;
   if (typeof nativeWriter !== 'function') return false;
@@ -61,11 +49,17 @@ async function copyPromptReliably() {
   throw new Error('El portapapeles no está disponible.');
 }
 
-function renamePromptButtons() {
+function relabelPromptButtons() {
   document.querySelectorAll('button').forEach((button) => {
     const label = button.textContent.trim();
-    if (label === 'Copiar reglas IA') button.textContent = 'Copiar prompt IA';
-    if (label === 'Descargar reglas') button.textContent = 'Descargar prompt';
+    if (label === 'Copiar reglas IA') {
+      button.textContent = 'Copiar prompt IA';
+      button.title = 'Copia el prompt maestro de 11 Records para pegarlo en ChatGPT u otra IA.';
+    }
+    if (label === 'Descargar reglas') {
+      button.textContent = 'Descargar prompt';
+      button.title = 'Descarga una copia del prompt maestro de 11 Records.';
+    }
   });
 }
 
@@ -76,27 +70,13 @@ export default function ClipboardEnhancer() {
     let resetTimer = 0;
     let noticeTimer = 0;
 
-    renamePromptButtons();
-    const observer = new MutationObserver(renamePromptButtons);
+    relabelPromptButtons();
+    const observer = new MutationObserver(relabelPromptButtons);
     observer.observe(document.body, { childList: true, subtree: true });
 
     const handler = async (event) => {
       const button = event.target?.closest?.('button');
-      if (!button) return;
-      const label = button.textContent.trim();
-
-      if (label === 'Descargar prompt' || label === 'Descargar reglas') {
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation?.();
-        downloadPrompt();
-        setNotice({ type: 'success', text: 'Prompt de 11 Records descargado.' });
-        window.clearTimeout(noticeTimer);
-        noticeTimer = window.setTimeout(() => setNotice(null), 2600);
-        return;
-      }
-
-      if (label !== 'Copiar prompt IA' && label !== 'Copiar reglas IA') return;
+      if (!button || !['Copiar prompt IA', 'Copiar reglas IA'].includes(button.textContent.trim())) return;
 
       event.preventDefault();
       event.stopPropagation();
@@ -104,21 +84,21 @@ export default function ClipboardEnhancer() {
 
       const originalLabel = 'Copiar prompt IA';
       button.disabled = true;
-      button.textContent = 'Copiando…';
+      button.textContent = 'Copiando prompt…';
 
       try {
         await copyPromptReliably();
         button.textContent = '✓ Prompt copiado';
         setNotice({
           type: 'success',
-          text: 'Prompt de 11 Records copiado. Pégalo en ChatGPT y luego pega en Videos Studio únicamente el guion generado.',
+          text: 'Prompt maestro de 11 Records copiado. Pégalo en ChatGPT, agrega tu tema y luego pega aquí únicamente el guion generado.',
         });
       } catch (caught) {
         console.error(caught);
         button.textContent = 'No se pudo copiar';
         setNotice({
           type: 'error',
-          text: 'No se pudo copiar el prompt. Puedes usar “Descargar prompt” como respaldo.',
+          text: 'No se pudo copiar el prompt. Usa “Descargar prompt” como respaldo.',
         });
       } finally {
         window.clearTimeout(resetTimer);
@@ -129,7 +109,7 @@ export default function ClipboardEnhancer() {
             button.textContent = originalLabel;
           }
         }, 1700);
-        noticeTimer = window.setTimeout(() => setNotice(null), 4200);
+        noticeTimer = window.setTimeout(() => setNotice(null), 4600);
       }
     };
 
@@ -155,7 +135,7 @@ export default function ClipboardEnhancer() {
         display: 'flex',
         alignItems: 'center',
         gap: 10,
-        maxWidth: 430,
+        maxWidth: 460,
         padding: '11px 14px',
         border: `1px solid ${notice.type === 'success' ? '#b7e5ca' : '#f1bdc4'}`,
         borderRadius: 12,
