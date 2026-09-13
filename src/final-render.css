@@ -1,0 +1,137 @@
+.final-render-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.final-render-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.final-render-heading > div {
+  display: grid;
+  gap: 4px;
+}
+
+.final-render-heading strong {
+  font-size: 17px;
+  color: #17212b;
+}
+
+.final-render-heading small {
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.final-render-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.final-render-status span {
+  border: 1px solid #dbe3ee;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  background: #fff;
+}
+
+.final-render-status .ok {
+  color: #13713d;
+  border-color: #bfe7cf;
+  background: #f2fbf6;
+}
+
+.final-render-status .warn {
+  color: #9a5d00;
+  border-color: #f0d7a7;
+  background: #fffaf0;
+}
+
+.final-render-warning,
+.final-render-error {
+  border-radius: 11px;
+  padding: 10px 12px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.final-render-warning {
+  border: 1px solid #f0d7a7;
+  background: #fffaf0;
+  color: #7a4a00;
+}
+
+.final-render-error {
+  border: 1px solid #f2c0c0;
+  background: #fff5f5;
+  color: #a52a2a;
+}
+
+.final-render-progress {
+  display: grid;
+  gap: 6px;
+}
+
+.final-render-progress > div {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf1f6;
+}
+
+.final-render-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #315bd8;
+  transition: width .2s ease;
+}
+
+.final-render-progress span {
+  color: #607086;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.final-render-output {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.4fr) minmax(180px, .6fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.final-render-output video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #0b1220;
+}
+
+.final-render-output > div {
+  display: grid;
+  gap: 8px;
+  align-content: center;
+}
+
+.final-render-output span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .final-render-heading,
+  .final-render-output {
+    grid-template-columns: 1fr;
+  }
+
+  .final-render-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
