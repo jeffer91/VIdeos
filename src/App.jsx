@@ -7,6 +7,7 @@ import ProjectBackupManager from './ProjectBackupManager';
 import FinalRenderManager from './FinalRenderManager';
 import SlideEditorManager from './SlideEditorManager';
 import VerificationManager from './VerificationManager';
+import PromptVerificationGuard from './PromptVerificationGuard';
 import RecordingViewEnhancer from './RecordingViewEnhancer';
 import CutStudioEnhancer from './CutStudioEnhancer';
 import CutSaveStatusBridge from './CutSaveStatusBridge';
@@ -28,6 +29,7 @@ export default function App() {
       <FinalRenderManager />
       <SlideEditorManager />
       <VerificationManager />
+      <PromptVerificationGuard />
       <RecordingViewEnhancer />
       <CutStudioEnhancer />
       <CutSaveStatusBridge />
