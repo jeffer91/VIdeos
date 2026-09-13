@@ -73,6 +73,18 @@ function templatePreferencesKey(projectId) {
   return `${TEMPLATE_PREFERENCES_PREFIX}${projectId}`;
 }
 
+function takeMetadata(row) {
+  if (!row) return null;
+  const { blob, cleanedBlob, ...metadata } = row;
+  return {
+    ...metadata,
+    hasBlob: blob instanceof Blob && blob.size > 0,
+    hasCleanedBlob: cleanedBlob instanceof Blob && cleanedBlob.size > 0,
+    blobSize: Number(blob?.size) || 0,
+    cleanedBlobSize: Number(cleanedBlob?.size) || 0,
+  };
+}
+
 export async function clearRecordingData() {
   const db = await openDb();
   const tx = db.transaction([CHUNKS_STORE, META_STORE], 'readwrite');
@@ -187,6 +199,10 @@ export async function getSlideTake(projectId, slideNumber) {
   return value;
 }
 
+export async function getSlideTakeMetadata(projectId, slideNumber) {
+  return takeMetadata(await getSlideTake(projectId, slideNumber));
+}
+
 export async function getProjectTakes(projectId) {
   if (!projectId) return [];
   const db = await openDb();
@@ -204,10 +220,35 @@ export async function getProjectTakes(projectId) {
   return rows.sort((a, b) => a.slideNumber - b.slideNumber);
 }
 
+export async function getProjectTakeMetadata(projectId) {
+  const rows = await getProjectTakes(projectId);
+  return rows.map(takeMetadata);
+}
+
 export async function deleteSlideTake(projectId, slideNumber) {
   const db = await openDb();
   const tx = db.transaction(TAKES_STORE, 'readwrite');
   tx.objectStore(TAKES_STORE).delete(takeKey(projectId, slideNumber));
+  await transactionDone(tx);
+}
+
+export async function deleteProject(projectId) {
+  if (!projectId) return;
+  const db = await openDb();
+  const readTx = db.transaction([TAKES_STORE, META_STORE], 'readonly');
+  const takeStore = readTx.objectStore(TAKES_STORE);
+  const rows = takeStore.indexNames.contains('by_project')
+    ? (await requestValue(takeStore.index('by_project').getAll(projectId))) || []
+    : ((await requestValue(takeStore.getAll())) || []).filter((take) => take.projectId === projectId);
+  const active = await requestValue(readTx.objectStore(META_STORE).get(ACTIVE_PROJECT_KEY));
+  await transactionDone(readTx);
+
+  const tx = db.transaction([PROJECTS_STORE, TAKES_STORE, META_STORE], 'readwrite');
+  tx.objectStore(PROJECTS_STORE).delete(projectId);
+  const takes = tx.objectStore(TAKES_STORE);
+  rows.forEach((row) => takes.delete(row.key));
+  tx.objectStore(META_STORE).delete(templatePreferencesKey(projectId));
+  if (active?.projectId === projectId) tx.objectStore(META_STORE).delete(ACTIVE_PROJECT_KEY);
   await transactionDone(tx);
 }
 
