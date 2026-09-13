@@ -12,6 +12,7 @@ import IntegrityGuard from './IntegrityGuard';
 import RecoverySafetyGuard from './RecoverySafetyGuard';
 import UpdateEnhancer from './UpdateEnhancer';
 import './branding.css';
+import './safety-fixes.css';
 
 export default function App() {
   return (
