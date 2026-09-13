@@ -9,6 +9,7 @@ import SlideEditorManager from './SlideEditorManager';
 import RecordingViewEnhancer from './RecordingViewEnhancer';
 import CutStudioEnhancer from './CutStudioEnhancer';
 import IntegrityGuard from './IntegrityGuard';
+import RecoverySafetyGuard from './RecoverySafetyGuard';
 import UpdateEnhancer from './UpdateEnhancer';
 import './branding.css';
 
@@ -26,6 +27,7 @@ export default function App() {
       <RecordingViewEnhancer />
       <CutStudioEnhancer />
       <IntegrityGuard />
+      <RecoverySafetyGuard />
       <UpdateEnhancer />
     </>
   );
