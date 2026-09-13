@@ -17,21 +17,34 @@ function legacyCopy(text) {
   return copied;
 }
 
-async function copyRulesReliably() {
+async function tryNativeCopy(text) {
   const nativeWriter = window.videosStudio?.clipboard?.writeText;
-  if (typeof nativeWriter === 'function') {
-    const result = await nativeWriter(AI_FORMAT_RULES);
-    if (!result?.ok || Number(result.length) !== AI_FORMAT_RULES.length) {
-      throw new Error('La aplicación no pudo verificar el texto copiado.');
-    }
-    return 'native';
+  if (typeof nativeWriter !== 'function') return false;
+  try {
+    const result = await nativeWriter(text);
+    if (!result?.ok) return false;
+    if (result.verified === true && Number(result.length) !== AI_FORMAT_RULES.length) return false;
+    return true;
+  } catch (caught) {
+    console.warn('Native clipboard fallback:', caught);
+    return false;
   }
+}
 
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(AI_FORMAT_RULES);
-    return 'web';
+async function tryWebCopy(text) {
+  if (!navigator.clipboard?.writeText) return false;
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (caught) {
+    console.warn('Web clipboard fallback:', caught);
+    return false;
   }
+}
 
+async function copyRulesReliably() {
+  if (await tryNativeCopy(AI_FORMAT_RULES)) return 'native';
+  if (await tryWebCopy(AI_FORMAT_RULES)) return 'web';
   if (legacyCopy(AI_FORMAT_RULES)) return 'legacy';
   throw new Error('El portapapeles no está disponible.');
 }
@@ -47,8 +60,6 @@ export default function ClipboardEnhancer() {
       const button = event.target?.closest?.('button');
       if (!button || button.textContent.trim() !== 'Copiar reglas IA') return;
 
-      // ProductionApp todavía conserva su fallback web. Lo detenemos aquí para
-      // que una sola pulsación use el puente nativo y no se ejecuten dos copias.
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation?.();
@@ -60,7 +71,10 @@ export default function ClipboardEnhancer() {
       try {
         await copyRulesReliably();
         button.textContent = '✓ Reglas copiadas';
-        setNotice({ type: 'success', text: 'Reglas copiadas. Ya puedes pegarlas en ChatGPT.' });
+        setNotice({
+          type: 'success',
+          text: 'Reglas de 11 Records copiadas. Ya puedes pegarlas en ChatGPT.',
+        });
       } catch (caught) {
         console.error(caught);
         button.textContent = 'No se pudo copiar';
