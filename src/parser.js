@@ -17,6 +17,7 @@ ANTES DE ESCRIBIR
 CÓMO DEBE SENTIRSE EL VIDEO
 - Debe contar una historia, no parecer una lista de estadísticas.
 - Cada diapositiva debe aportar información nueva.
+- MUY IMPORTANTE: no repitas contenido entre diapositivas. Si un dato, cifra, comparación o explicación ya apareció, no lo vuelvas a presentar en otra diapositiva salvo que sea imprescindible para entender una idea nueva; en ese caso, no lo copies literalmente y aporta información adicional.
 - Evita repetir el mismo dato sin aportar contexto adicional.
 - La narración debe ser clara, dinámica, conversacional y fácil de leer en teleprompter.
 - CUERPO contiene las ideas principales que verá el espectador.
