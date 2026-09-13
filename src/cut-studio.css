@@ -1,0 +1,281 @@
+/* Corte: editor visual con transporte persistente, onda y selección directa. */
+.cut-flow .cut-grid {
+  align-items: stretch;
+}
+
+.cut-flow .cut-editor {
+  min-height: 0 !important;
+  overflow: auto !important;
+  display: grid !important;
+  grid-template-rows: auto auto auto auto auto auto !important;
+  align-content: start !important;
+  gap: 9px !important;
+  padding: 10px !important;
+}
+
+.cut-flow .cut-video {
+  order: 0;
+  width: 100%;
+  min-height: 260px;
+  max-height: 46vh;
+  aspect-ratio: 16 / 9;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #000000 !important;
+}
+
+.cut-flow .cut-video video,
+.cut-flow .cut-video audio {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+}
+
+.cut-flow .cut-video video {
+  object-fit: contain !important;
+  background: #000000 !important;
+}
+
+.cut-flow .cut-studio-enhancer { order: 1; }
+.cut-flow .trim-controls { order: 2; }
+.cut-flow .internal-cut-editor { order: 3; }
+.cut-flow .cut-summary { order: 4; }
+.cut-flow .cut-editor > .primary-button { order: 5; display: none !important; }
+
+.cut-studio-enhancer {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--vs-border, #d8e0e8);
+  border-radius: 11px;
+  background: #fbfcfe;
+}
+
+.cut-transport {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto minmax(130px, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.cut-scene-name {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.cut-scene-name span {
+  color: #64748b;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.cut-scene-name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+.cut-transport-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.cut-transport-buttons button,
+.cut-quick-actions button,
+.silence-suggestions button {
+  min-height: 29px;
+  border: 1px solid #cfd9e3;
+  border-radius: 7px;
+  padding: 0 9px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.cut-transport-buttons button:hover,
+.cut-quick-actions button:hover,
+.silence-suggestions button:hover {
+  border-color: #9bbcff;
+  background: #f7faff;
+}
+
+.cut-play-button {
+  min-width: 82px;
+  border-color: #9bbcff !important;
+  background: #eaf2ff !important;
+  color: #1746a2 !important;
+}
+
+.cut-time-readout {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cut-time-readout strong {
+  font-size: 15px;
+}
+
+.cut-time-readout span {
+  color: #64748b;
+  font-size: 9px;
+}
+
+.waveform-shell {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  padding: 7px 8px 6px;
+  border: 1px solid #d8e0e8;
+  border-radius: 9px;
+  background: #ffffff;
+}
+
+.cut-waveform {
+  width: 100%;
+  height: 96px;
+  display: block;
+  cursor: crosshair;
+  touch-action: none;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #fbfdff, #f4f7fa);
+}
+
+.waveform-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: #64748b;
+  font-size: 8px;
+}
+
+.waveform-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.waveform-legend i {
+  width: 10px;
+  height: 6px;
+  display: inline-block;
+  border-radius: 2px;
+}
+
+.legend-selection { background: rgba(37, 99, 235, .28); }
+.legend-cut { background: rgba(220, 38, 38, .28); }
+.legend-silence { background: rgba(245, 158, 11, .24); }
+.waveform-legend small { margin-left: auto; color: #7c8a99; }
+
+.cut-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.cut-quick-actions button.active {
+  border-color: #2563eb !important;
+  background: #eaf2ff !important;
+  color: #1746a2 !important;
+}
+
+.cut-quick-actions button:disabled {
+  opacity: .45;
+}
+
+.silence-suggestions {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px;
+  color: #64748b;
+  font-size: 8px;
+}
+
+.silence-suggestions > div {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 1px;
+}
+
+.silence-suggestions button {
+  min-height: 25px;
+  padding: 0 7px;
+  flex: 0 0 auto;
+  border-color: #f2d49a;
+  background: #fffaf0;
+  color: #8a5a00;
+  font-size: 8px;
+}
+
+.cut-enhancer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cut-enhancer-footer small {
+  color: #64748b;
+  font-size: 8px;
+}
+
+.cut-enhancer-footer .primary-button {
+  min-width: 150px;
+  min-height: 31px;
+}
+
+.cut-flow .trim-controls {
+  padding-top: 1px;
+}
+
+.cut-flow .trim-track > div {
+  position: relative;
+}
+
+.cut-flow .internal-cut-editor {
+  padding: 8px !important;
+}
+
+@media (max-width: 1180px) {
+  .cut-flow .cut-grid {
+    grid-template-columns: 270px minmax(0, 1fr) !important;
+  }
+
+  .cut-transport {
+    grid-template-columns: 1fr;
+  }
+
+  .cut-scene-name,
+  .cut-time-readout {
+    justify-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .waveform-legend {
+    flex-wrap: wrap;
+  }
+
+  .waveform-legend small {
+    width: 100%;
+    margin-left: 0;
+  }
+}
