@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   clearRecordingData,
+  deleteProject,
   getActiveProject,
   getChunks,
   getRecordingMeta,
   listProjects,
   setActiveProject,
 } from './storage';
+import { deleteProjectVisualData } from './visualStore';
 
 const LAUNCH_MODE_KEY = 'videosstudio:project-launch-mode';
 
@@ -154,6 +156,45 @@ export default function ProjectManager() {
     changeProject({ projectId: project.id, mode: 'open' });
   }
 
+  async function deleteSavedProject(project) {
+    if (!project?.id || busy || !guardRecording()) return;
+    const confirmed = window.confirm(
+      `¿Eliminar definitivamente “${project.name || 'Proyecto sin nombre'}”?\n\nSe borrarán sus grabaciones, cortes, imágenes y ajustes locales. Esta acción no se puede deshacer. Si quieres conservarlo, crea primero un Respaldo.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      const meta = await getRecordingMeta();
+      const chunks = meta?.projectId === project.id ? await getChunks() : [];
+      if (chunks.length) {
+        const discard = window.confirm(
+          `Este proyecto tiene una grabación interrumpida recuperable de la diapositiva ${meta.slideNumber}. Eliminar el proyecto también borrará esa recuperación. ¿Continuar?`,
+        );
+        if (!discard) return;
+      }
+
+      setBusy(true);
+      setError('');
+      if (meta?.projectId === project.id) await clearRecordingData();
+      await Promise.all([
+        deleteProject(project.id),
+        deleteProjectVisualData(project.id),
+      ]);
+
+      if (activeProject?.id === project.id) {
+        sessionStorage.setItem(LAUNCH_MODE_KEY, 'hub');
+        window.location.reload();
+        return;
+      }
+      await refreshProjects();
+    } catch (caught) {
+      console.error(caught);
+      setError(caught?.message || 'No se pudo eliminar el proyecto.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const controls = (
     <div className="project-command-bar">
       <button className="project-current" onClick={() => setHubOpen(true)} title="Abrir lista de proyectos">
@@ -207,7 +248,10 @@ export default function ProjectManager() {
                   </div>
                   <small>{item.slides?.length || 0} diapositivas · Actualizado {formatUpdated(item.updatedAt)}</small>
                 </div>
-                <button onClick={() => openProject(item)} disabled={busy}>{isActive ? 'Continuar' : 'Abrir'}</button>
+                <div className="project-list-actions">
+                  <button onClick={() => openProject(item)} disabled={busy}>{isActive ? 'Continuar' : 'Abrir'}</button>
+                  <button className="project-delete-button" onClick={() => deleteSavedProject(item)} disabled={busy}>Eliminar</button>
+                </div>
               </article>
             );
           }) : (
