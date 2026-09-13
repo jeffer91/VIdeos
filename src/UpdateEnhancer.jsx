@@ -7,6 +7,13 @@ function isRecordingBusy() {
   ));
 }
 
+function isProductionBusy() {
+  if (isRecordingBusy()) return true;
+  return [...document.querySelectorAll('button:disabled')].some((button) => (
+    /Procesando|Guardando|Detectando|Generando|Exportando|Renderizando/i.test(button.textContent || '')
+  ));
+}
+
 export default function UpdateEnhancer() {
   const [headerTarget, setHeaderTarget] = useState(null);
   const [appInfo, setAppInfo] = useState(null);
@@ -52,10 +59,16 @@ export default function UpdateEnhancer() {
   }
 
   async function installUpdate() {
-    if (isRecordingBusy()) {
-      setNotice('Finaliza la grabación actual antes de reiniciar para actualizar.');
+    if (isProductionBusy()) {
+      setNotice('Finaliza el proceso actual antes de reiniciar Videos Studio para actualizar.');
       return;
     }
+
+    const confirmed = window.confirm(
+      'Videos Studio se cerrará y volverá a abrir con la nueva versión. Asegúrate de haber guardado cualquier cambio de contenido que aún no hayas confirmado. ¿Actualizar ahora?',
+    );
+    if (!confirmed) return;
+
     try {
       await window.videosStudio?.updates?.install?.();
     } catch {
