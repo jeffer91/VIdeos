@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import {
   getActiveProject,
-  getProjectTakes,
+  getProjectTakeMetadata,
   getTemplateMetadataMap,
   getTemplatePreferences,
   saveProject,
@@ -94,7 +94,7 @@ export default function IntegrityGuard() {
       let libraryDefaults = {};
       if (readySlides.length) {
         [takes, visualCounts, libraryDefaults] = await Promise.all([
-          getProjectTakes(active.id),
+          getProjectTakeMetadata(active.id),
           getVisualCountsBySlide(active.id),
           window.videosStudio?.library?.getDefaults?.() || Promise.resolve({}),
         ]);
@@ -126,7 +126,7 @@ export default function IntegrityGuard() {
         const templateChangedAfterReview = currentTemplatePath
           && Number(metadataMap[currentTemplatePath]?.analyzedAt || 0) > sceneUpdatedAt;
 
-        const stale = !take?.cleanedBlob
+        const stale = !take?.hasCleanedBlob
           || (Number(take?.updatedAt) || 0) > sceneUpdatedAt
           || visualCount < 1
           || (Number(scene?.visualImages) > 0 && Number(scene.visualImages) !== visualCount)
@@ -190,8 +190,8 @@ export default function IntegrityGuard() {
     const onClick = (event) => {
       const button = event.target?.closest?.('button');
       const text = button?.textContent || '';
-      if (/Guardar corte limpio|Aceptar|Regrabar|Repetir|Recuperar toma|Marcar escena lista|Predeterminar/i.test(text)) {
-        scheduleAudit(/Guardar corte limpio|Recuperar toma/i.test(text) ? 1800 : 700);
+      if (/Guardar corte limpio|Guardar y siguiente|Aceptar|Regrabar|Repetir|Recuperar toma|Marcar escena lista|Predeterminar/i.test(text)) {
+        scheduleAudit(/Guardar corte limpio|Guardar y siguiente|Recuperar toma/i.test(text) ? 1800 : 700);
       } else if (event.target?.closest?.('.template-drawer')) {
         scheduleAudit(700);
       }
