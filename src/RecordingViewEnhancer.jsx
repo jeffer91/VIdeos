@@ -54,6 +54,7 @@ export default function RecordingViewEnhancer() {
       if (['recording', 'paused', 'saving'].includes(nextStatus)) {
         setViewMode('prompter');
       } else if (nextStatus === 'stopped') {
+        manualModeRef.current = 'camera';
         setViewMode('camera');
       } else {
         setViewMode(manualModeRef.current);
