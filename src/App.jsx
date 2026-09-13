@@ -5,6 +5,8 @@ import WorkflowEnhancer from './WorkflowEnhancer';
 import ProjectManager from './ProjectManager';
 import ClipboardEnhancer from './ClipboardEnhancer';
 import IntegrityGuard from './IntegrityGuard';
+import UpdateEnhancer from './UpdateEnhancer';
+import './branding.css';
 
 export default function App() {
   return (
@@ -16,6 +18,7 @@ export default function App() {
       <ProjectManager />
       <ClipboardEnhancer />
       <IntegrityGuard />
+      <UpdateEnhancer />
     </>
   );
 }
