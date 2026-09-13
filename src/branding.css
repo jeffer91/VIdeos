@@ -1,0 +1,51 @@
+.production-brand {
+  position: relative;
+  padding-left: 44px;
+  min-height: 36px;
+}
+
+.production-brand::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 36px;
+  height: 36px;
+  transform: translateY(-50%);
+  background: url('/app-icon.png') center / contain no-repeat;
+  filter: drop-shadow(0 3px 7px rgba(45, 65, 160, .18));
+}
+
+.production-brand > span {
+  font-size: 0;
+}
+
+.production-brand > span::after {
+  content: '11 Records · Producción por escenas';
+  font-size: 11px;
+}
+
+.project-hub-eyebrow {
+  font-size: 0;
+}
+
+.project-hub-eyebrow::after {
+  content: '11 RECORDS · VIDEOS STUDIO';
+  font-size: 11px;
+  letter-spacing: .08em;
+}
+
+.project-hub header > div:first-child {
+  position: relative;
+  padding-left: 54px;
+}
+
+.project-hub header > div:first-child::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 44px;
+  height: 44px;
+  background: url('/app-icon.png') center / contain no-repeat;
+}
