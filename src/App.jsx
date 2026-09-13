@@ -5,6 +5,7 @@ import WorkflowEnhancer from './WorkflowEnhancer';
 import ProjectManager from './ProjectManager';
 import ProjectBackupManager from './ProjectBackupManager';
 import FinalRenderManager from './FinalRenderManager';
+import SlideEditorManager from './SlideEditorManager';
 import IntegrityGuard from './IntegrityGuard';
 import UpdateEnhancer from './UpdateEnhancer';
 import './branding.css';
@@ -19,6 +20,7 @@ export default function App() {
       <ProjectManager />
       <ProjectBackupManager />
       <FinalRenderManager />
+      <SlideEditorManager />
       <IntegrityGuard />
       <UpdateEnhancer />
     </>
