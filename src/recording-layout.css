@@ -1,21 +1,108 @@
-/* Grabación: preparar cámara limpia, ensayar arriba y grabar sin cubrir el encuadre. */
-.recording-flow .slide-flow-header > div {
-  display: grid;
-  justify-items: center;
-  gap: 4px;
+/* Grabación: una jerarquía clara — diapositiva, preparación, cámara y acción de toma. */
+.recording-flow .slide-flow-header {
+  display: grid !important;
+  grid-template-columns: 30px auto 30px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  column-gap: 9px !important;
+  min-height: 38px !important;
+  width: 100% !important;
 }
 
+.recording-flow .slide-flow-header > button:first-child {
+  grid-column: 1 !important;
+}
+
+.recording-flow .slide-flow-header > div {
+  grid-column: 2 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-wrap: wrap !important;
+  gap: 5px 8px !important;
+  min-width: 0 !important;
+  max-width: min(1180px, calc(100vw - 170px)) !important;
+}
+
+.recording-flow .slide-flow-header > button:last-child {
+  grid-column: 3 !important;
+}
+
+.recording-flow .slide-flow-header > div > span:first-child {
+  flex: 0 0 auto;
+  margin: 0 !important;
+  color: #71839a !important;
+  font-size: 8px !important;
+  font-weight: 850 !important;
+  letter-spacing: .08em !important;
+  white-space: nowrap;
+}
+
+.recording-flow .slide-flow-header h1 {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 520px;
+  margin: 0 !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(15px, 1.35vw, 20px) !important;
+  line-height: 1.1 !important;
+}
+
+.recording-header-status {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid #cfe1d8;
+  border-radius: 999px;
+  background: #f2fbf6;
+  color: #177245;
+  font-size: 8px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.recording-header-status.state-recording {
+  border-color: #f2b9b9;
+  background: #fff3f3;
+  color: #b42318;
+}
+
+.recording-header-status.state-paused,
+.recording-header-status.state-saving,
+.recording-header-status.state-detecting {
+  border-color: #ead6a4;
+  background: #fff9eb;
+  color: #8a5a00;
+}
+
+.recording-flow .slide-mini-rail {
+  margin-top: 1px !important;
+  margin-bottom: 3px !important;
+}
+
+/* Preparación de cámara: junto a la cámara, no mezclada con las acciones de la diapositiva. */
 .recording-view-switch {
-  display: flex;
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  justify-self: center !important;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 5px;
-  margin-top: 2px;
+  margin: 0 0 3px !important;
+  padding: 3px;
+  border: 1px solid #dce5f0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .86);
 }
 
 .recording-view-switch button {
   min-height: 25px !important;
-  padding: 0 9px !important;
+  padding: 0 10px !important;
   border-radius: 999px !important;
   font-size: 8px !important;
   font-weight: 750 !important;
@@ -32,8 +119,8 @@
   min-height: 0 !important;
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) !important;
-  grid-template-rows: minmax(0, 1fr) !important;
-  gap: 8px !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  gap: 4px !important;
   align-items: stretch !important;
 }
 
@@ -46,7 +133,7 @@
 }
 
 .recording-production-grid > .camera-production-card {
-  grid-row: 1 !important;
+  grid-row: 2 !important;
   position: relative !important;
   z-index: 1 !important;
 }
@@ -56,13 +143,13 @@
 }
 
 .recording-flow[data-recording-view='prompter'] .recording-production-grid {
-  grid-template-rows: auto minmax(0, 1fr) !important;
+  grid-template-rows: auto auto minmax(0, 1fr) !important;
 }
 
 .recording-flow[data-recording-view='prompter'] .prompter-production-card {
   display: grid !important;
   grid-column: 1 !important;
-  grid-row: 1 !important;
+  grid-row: 2 !important;
   justify-self: center !important;
   width: min(900px, 76%) !important;
   min-height: 0 !important;
@@ -79,7 +166,7 @@
 }
 
 .recording-flow[data-recording-view='prompter'] .camera-production-card {
-  grid-row: 2 !important;
+  grid-row: 3 !important;
 }
 
 .prompter-production-card::before {
@@ -123,7 +210,7 @@
   min-width: 82px;
 }
 
-/* El ensayo se controla desde la cabecera; el botón interno sigue existiendo para la lógica. */
+/* El ensayo se controla desde la barra de preparación; el botón interno sigue existiendo para la lógica. */
 .recording-flow .prompter-actions .primary-button {
   display: none !important;
 }
@@ -152,6 +239,19 @@
   text-align: left;
   white-space: pre-wrap;
   color: #17212b !important;
+}
+
+/* La fila de dispositivos queda para preparar la toma; el estado vive junto al título. */
+.recording-flow .recording-topline {
+  gap: 7px !important;
+}
+
+.recording-flow .recording-topline .status-pill {
+  display: none !important;
+}
+
+.recording-flow:has(.status-stopped) .recording-topline {
+  display: none !important;
 }
 
 /* La vista de cámara debe enseñar exactamente el cuadro capturado: nunca recortar cabeza o bordes. */
@@ -207,7 +307,20 @@
   letter-spacing: .06em;
 }
 
-/* Durante una toma, el prompter queda arriba y los controles secundarios desaparecen. */
+/* Revisar una toma: cámara/reproductor protagonista, sin herramientas de preparación ni dispositivos inactivos. */
+.recording-flow:has(.status-stopped) .recording-production-grid {
+  grid-template-rows: minmax(0, 1fr) !important;
+}
+
+.recording-flow:has(.status-stopped) .camera-production-card {
+  grid-row: 1 !important;
+}
+
+.recording-flow:has(.status-stopped) .prompter-production-card {
+  display: none !important;
+}
+
+/* Durante una toma, el prompter queda arriba y desaparece todo lo secundario. */
 .recording-flow:has(.status-recording),
 .recording-flow:has(.status-paused) {
   grid-template-rows: auto minmax(0, 1fr) !important;
@@ -220,7 +333,9 @@
 .recording-flow:has(.status-recording) .capture-meta,
 .recording-flow:has(.status-paused) .capture-meta,
 .recording-flow:has(.status-recording) .recording-view-switch,
-.recording-flow:has(.status-paused) .recording-view-switch {
+.recording-flow:has(.status-paused) .recording-view-switch,
+.recording-flow:has(.status-recording) .verification-inline-button,
+.recording-flow:has(.status-paused) .verification-inline-button {
   display: none !important;
 }
 
@@ -272,12 +387,11 @@
   padding: 10px 32px 48px !important;
 }
 
-/* Al revisar una toma desaparece el prompter: el video vuelve a ser protagonista. */
-.recording-flow:has(.status-stopped) .prompter-production-card {
-  display: none !important;
-}
-
 @media (max-width: 1180px) {
+  .recording-flow .slide-flow-header > div {
+    max-width: calc(100vw - 120px) !important;
+  }
+
   .recording-flow[data-recording-view='prompter'] .prompter-production-card,
   .recording-flow:has(.status-recording) .prompter-production-card,
   .recording-flow:has(.status-paused) .prompter-production-card {
