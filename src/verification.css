@@ -1,0 +1,114 @@
+.verification-inline-button {
+  min-height: 25px !important;
+  padding: 0 10px !important;
+  border-radius: 999px !important;
+  font-size: 8px !important;
+  font-weight: 800 !important;
+}
+
+.verification-inline-button.pending {
+  border-color: #efd39a !important;
+  background: #fffaf0 !important;
+  color: #8a5a00 !important;
+}
+
+.verification-inline-button.verified {
+  border-color: #a8dfc7 !important;
+  background: #f1fcf6 !important;
+  color: #13713d !important;
+}
+
+.verification-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 15000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, .34);
+  backdrop-filter: blur(4px);
+}
+
+.verification-modal {
+  width: min(720px, 94vw);
+  max-height: 90vh;
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid #d7e0ea;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, .22);
+}
+
+.verification-modal header,
+.verification-modal footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.verification-modal header h2 {
+  margin: 2px 0;
+}
+
+.verification-modal header p,
+.verification-summary p {
+  margin: 0;
+  color: #64748b;
+}
+
+.verification-modal header > button {
+  min-width: 34px;
+  min-height: 34px;
+  border-radius: 999px;
+}
+
+.verification-summary {
+  display: grid;
+  gap: 5px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.verification-modal label {
+  display: grid;
+  gap: 5px;
+}
+
+.verification-modal label > span {
+  color: #475569;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.verification-modal textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid #d5dee8;
+  border-radius: 9px;
+  padding: 9px 10px;
+  background: #fff;
+  color: #17212b;
+  font: inherit;
+}
+
+.verification-error {
+  padding: 8px 10px;
+  border: 1px solid #f2c7c7;
+  border-radius: 9px;
+  background: #fff6f6;
+  color: #a52a2a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.verification-modal footer {
+  justify-content: flex-end;
+}
