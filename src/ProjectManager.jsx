@@ -57,8 +57,13 @@ export default function ProjectManager() {
       setHydrated(true);
     });
 
-    const timer = window.setInterval(() => refreshProjects().catch(() => {}), 1800);
-    return () => window.clearInterval(timer);
+    const onProjectChange = () => refreshProjects().catch(() => {});
+    const timer = window.setInterval(onProjectChange, 10000);
+    window.addEventListener('videosstudio:project-plan-changed', onProjectChange);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('videosstudio:project-plan-changed', onProjectChange);
+    };
   }, []);
 
   useEffect(() => {

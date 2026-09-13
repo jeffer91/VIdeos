@@ -1,6 +1,6 @@
 import { CHANNEL_PROFILE } from './channel.js';
 
-export const AI_FORMAT_RULES = `PROMPT MAESTRO · ${CHANNEL_PROFILE.name.toUpperCase()} · VIDEOS STUDIO
+export const AI_MASTER_PROMPT = `PROMPT MAESTRO · ${CHANNEL_PROFILE.name.toUpperCase()} · VIDEOS STUDIO
 
 Actúa como guionista, editor y verificador de datos del canal de YouTube ${CHANNEL_PROFILE.name}.
 
@@ -93,6 +93,9 @@ REGLAS DEL CONTENIDO
 
 IMPORTANTE
 Cuando termines de leer este prompt, espera o utiliza el tema/noticia que te entregue y responde solamente con el formato anterior. No devuelvas este prompt ni expliques sus reglas.`;
+
+// Alias temporal para compatibilidad con módulos antiguos.
+export const AI_FORMAT_RULES = AI_MASTER_PROMPT;
 
 const VISUAL_TYPES = new Set(['IMAGEN', 'GRAFICO_BARRAS', 'TABLA', 'COMPARATIVA', 'CRONOLOGIA', 'DIAGRAMA', 'NINGUNO']);
 const CTA_TYPES = new Set(['NINGUNO', 'SUSCRIBIRSE', 'COMENTAR', 'PREGUNTA', 'LIKE', 'OTRO']);
@@ -599,7 +602,7 @@ export function parseSlides(rawText = '') {
       return {
         slides: [],
         errors: [`Pegaste el prompt de ${CHANNEL_PROFILE.name}, no la respuesta de la IA. Pega el prompt en ChatGPT y luego copia aquí únicamente el guion que ChatGPT genere.`],
-        warnings: ['El prompt está bien. Videos Studio lo bloqueó para evitar crear diapositivas falsas.'],
+        warnings: [],
         corrections: [],
         inputKind: 'prompt',
       };

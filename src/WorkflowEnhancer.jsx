@@ -59,7 +59,7 @@ export default function WorkflowEnhancer() {
 
   useEffect(() => {
     refreshData().catch(() => {});
-    const timer = window.setInterval(() => refreshData().catch(() => {}), 1800);
+    const timer = window.setInterval(() => refreshData().catch(() => {}), 10000);
     const onChange = () => refreshData().catch(() => {});
     window.addEventListener('videosstudio:visuals-changed', onChange);
     window.addEventListener('videosstudio:project-plan-changed', onChange);

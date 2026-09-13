@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cutMedia } from './ffmpeg';
-import { AI_FORMAT_RULES, parseSlides } from './parser';
+import { AI_MASTER_PROMPT, parseSlides } from './parser';
 import {
   clearRecordingData,
   deleteSlideTake,
@@ -491,19 +491,31 @@ export default function ProductionApp() {
     setRangeEnd(Math.min(end, start + 1));
   }, [cutSlideIndex, cutTake?.updatedAt]);
 
-  async function copyAiRules() {
+  async function copyAiPrompt() {
     try {
-      await navigator.clipboard.writeText(AI_FORMAT_RULES);
-      setNotice('Reglas copiadas.');
-    } catch {
-      setError('No se pudieron copiar las reglas. Usa Descargar reglas.');
+      const nativeWriter = window.videosStudio?.clipboard?.writeText;
+      if (typeof nativeWriter === 'function') {
+        const result = await nativeWriter(AI_MASTER_PROMPT);
+        if (!result?.ok || (result.verified === true && Number(result.length) !== AI_MASTER_PROMPT.length)) {
+          throw new Error('El portapapeles no confirmó la copia completa.');
+        }
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(AI_MASTER_PROMPT);
+      } else {
+        throw new Error('El portapapeles no está disponible.');
+      }
+      setError('');
+      setNotice('Prompt maestro copiado. Pégalo en tu IA, agrega el tema y trae aquí únicamente el guion generado.');
+    } catch (caught) {
+      console.error(caught);
+      setError('No se pudo copiar el prompt. Usa “Descargar prompt” como respaldo.');
     }
   }
 
   function parseContent() {
     const result = parseSlides(rawText);
     setParseResult(result);
-    setError(result.errors[0] || '');
+    setError('');
   }
 
   async function loadContentFile(event) {
@@ -513,7 +525,7 @@ export default function ProductionApp() {
     setRawText(text);
     const result = parseSlides(text);
     setParseResult(result);
-    setError(result.errors[0] || '');
+    setError('');
     event.target.value = '';
   }
 
@@ -585,6 +597,7 @@ export default function ProductionApp() {
     });
 
     await saveProject(next);
+    window.dispatchEvent(new CustomEvent('videosstudio:project-plan-changed'));
     setProject(next);
     setTakes(project ? nextTakes : {});
     const firstPending = result.slides.findIndex((slide) => !nextTakes[slide.number]?.accepted);
@@ -1109,11 +1122,11 @@ export default function ProductionApp() {
       <main className="production-main">
         {view === 'content' && (
           <section className="flow-screen content-flow">
-            <div className="flow-heading"><div><span className="eyebrow">1 · CONTENIDO</span><h1>Cargar estructura del video</h1><p>GANCHO + TÍTULO + CUERPO + CONTENIDO + LECTURA + VISUAL + CTA.</p></div><div className="heading-actions"><button className="secondary-button" onClick={copyAiRules}>Copiar reglas IA</button><button className="secondary-button" onClick={() => downloadText(AI_FORMAT_RULES, 'reglas-videos-studio.txt')}>Descargar reglas</button></div></div>
+            <div className="flow-heading"><div><span className="eyebrow">1 · CONTENIDO</span><h1>Cargar guion del video</h1><p>Copia el prompt maestro en tu IA y pega aquí únicamente la respuesta estructurada.</p></div><div className="heading-actions"><button className="secondary-button" onClick={copyAiPrompt}>Copiar prompt IA</button><button className="secondary-button" onClick={() => downloadText(AI_MASTER_PROMPT, 'prompt-maestro-11-records-videos-studio.txt')}>Descargar prompt</button></div></div>
             <div className="content-production-grid">
               <div className="production-card source-card">
                 <div className="card-title-row"><strong>Contenido fuente</strong><label className="file-button">Cargar TXT<input type="file" accept=".txt,text/plain" onChange={loadContentFile} /></label></div>
-                <textarea value={rawText} onChange={(event) => { setRawText(event.target.value); setParseResult(null); }} placeholder={'DIAPOSITIVA 1\nGANCHO:\n...\n\nTÍTULO:\n...\n\nCUERPO:\n- ...\n\nCONTENIDO:\n- ...\n\nLECTURA:\n...\n\nVISUAL:\nTIPO: IMAGEN\nDESCRIPCIÓN: ...\n\nCTA:\nTIPO: NINGUNO\n\n//'} />
+                <textarea value={rawText} onChange={(event) => { setRawText(event.target.value); setParseResult(null); }} placeholder={'===DIAPOSITIVA 1===\n\n===GANCHO===\n...\n\n===TITULO===\n...\n\n===CUERPO===\nCUERPO_1=...\nCUERPO_2=...\n\n===CONTENIDO===\nCONTENIDO_1=...\nCONTENIDO_2=...\n\n===LECTURA===\n...\n===FIN_LECTURA===\n\n===VISUAL===\nVISUAL_TIPO=IMAGEN\nVISUAL_DESCRIPCION=...\n\n===CTA===\nCTA_TIPO=NINGUNO\nCTA_TEXTO=\n\n===FIN_DIAPOSITIVA 1==='} />
                 <button className="primary-button" onClick={parseContent} disabled={!rawText.trim()}>Procesar diapositivas</button>
               </div>
               <div className="production-card validation-card">

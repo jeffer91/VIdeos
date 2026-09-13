@@ -12,6 +12,10 @@ Aplicación de escritorio local con Electron + React + Vite para producir videos
 6. **Video memes**: programa un meme dentro de una escena. El video principal se pausa, queda desenfocado, se reproduce el meme y después continúa desde el mismo punto.
 7. **Resultado**: audita grabaciones, cortes, escenas, CTA, memes y recursos antes del futuro render final.
 
+## Prompt IA
+
+En **Contenido**, usa **Copiar prompt IA**, pégalo en ChatGPT u otra IA y añade el tema del video. Después copia únicamente la respuesta generada, que debe comenzar con `===DIAPOSITIVA 1===`, y pégala en Videos Studio. La app conserva compatibilidad con el formato anterior, pero el formato estructurado con separadores `===` es el recomendado.
+
 ## Política de clips
 
 - **Intro**: clip independiente al inicio.

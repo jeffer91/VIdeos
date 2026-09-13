@@ -1,6 +1,7 @@
 const { app, BrowserWindow, session, ipcMain, dialog, shell, clipboard } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
+const { fileURLToPath } = require('node:url');
 
 let autoUpdater = null;
 try {
@@ -20,11 +21,18 @@ const LIBRARY_CATEGORIES = new Set(['intros', 'transitions', 'endings', 'cta', '
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 
 function isTrustedRendererOrigin(value = '') {
-  return (
-    value.startsWith('http://127.0.0.1:') ||
-    value.startsWith('http://localhost:') ||
-    value.startsWith('file://')
-  );
+  if (!value) return false;
+  if (!app.isPackaged) {
+    return /^http:\/\/(?:127\.0\.0\.1|localhost):\d+(?:\/|$)/i.test(value);
+  }
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'file:') return false;
+    const target = fileURLToPath(parsed);
+    return isInside(path.join(app.getAppPath(), 'dist'), target);
+  } catch {
+    return false;
+  }
 }
 
 function isTrustedMediaRequest(webContents, requestingOrigin = '') {
@@ -55,10 +63,14 @@ function normalizeClipboardText(value = '') {
   return String(value).replace(/\r\n?/g, '\n').normalize('NFC');
 }
 
+function assertTrustedIpc(event) {
+  const senderUrl = event?.senderFrame?.url || event?.sender?.getURL?.() || '';
+  if (!isTrustedRendererOrigin(senderUrl)) throw new Error('Origen no autorizado para usar esta función.');
+}
+
 function configureClipboardIpc() {
   ipcMain.handle('clipboard:write-text', (event, value = '') => {
-    const senderUrl = event.senderFrame?.url || event.sender?.getURL?.() || '';
-    if (!isTrustedRendererOrigin(senderUrl)) throw new Error('Origen no autorizado para usar el portapapeles.');
+    assertTrustedIpc(event);
 
     const text = String(value ?? '');
     if (!text.trim()) throw new Error('No hay texto para copiar.');
@@ -214,7 +226,8 @@ function imageMimeType(filePath = '') {
 }
 
 function configureLibraryIpc() {
-  ipcMain.handle('library:import', async (_event, options = {}) => {
+  ipcMain.handle('library:import', async (event, options = {}) => {
+    assertTrustedIpc(event);
     const directory = libraryDirectory(options);
     await ensureDirectory(directory);
     const importingTemplates = options.category === 'templates';
@@ -247,9 +260,13 @@ function configureLibraryIpc() {
     return imported;
   });
 
-  ipcMain.handle('library:list', async (_event, options = {}) => listDirectory(options));
+  ipcMain.handle('library:list', async (event, options = {}) => {
+    assertTrustedIpc(event);
+    return listDirectory(options);
+  });
 
-  ipcMain.handle('library:delete', async (_event, options = {}) => {
+  ipcMain.handle('library:delete', async (event, options = {}) => {
+    assertTrustedIpc(event);
     const directory = libraryDirectory(options);
     const target = path.resolve(String(options.path || ''));
     if (!target || !isInside(directory, target) || target === path.resolve(directory)) {
@@ -264,7 +281,8 @@ function configureLibraryIpc() {
     return true;
   });
 
-  ipcMain.handle('library:set-default', async (_event, options = {}) => {
+  ipcMain.handle('library:set-default', async (event, options = {}) => {
+    assertTrustedIpc(event);
     if (!LIBRARY_CATEGORIES.has(options.category)) throw new Error('Categoría no válida.');
     const defaults = await readDefaults();
     if (!options.path) {
@@ -282,9 +300,13 @@ function configureLibraryIpc() {
     return defaults;
   });
 
-  ipcMain.handle('library:get-defaults', async () => readDefaults());
+  ipcMain.handle('library:get-defaults', async (event) => {
+    assertTrustedIpc(event);
+    return readDefaults();
+  });
 
-  ipcMain.handle('library:read-data-url', async (_event, options = {}) => {
+  ipcMain.handle('library:read-data-url', async (event, options = {}) => {
+    assertTrustedIpc(event);
     const target = path.resolve(String(options.path || ''));
     if (!target || !isInside(libraryRoot(), target) || target === path.resolve(libraryRoot())) {
       throw new Error('Archivo fuera de la biblioteca.');
@@ -295,14 +317,16 @@ function configureLibraryIpc() {
     return `data:${mimeType};base64,${data.toString('base64')}`;
   });
 
-  ipcMain.handle('library:reveal', async (_event, options = {}) => {
+  ipcMain.handle('library:reveal', async (event, options = {}) => {
+    assertTrustedIpc(event);
     const target = path.resolve(String(options.path || libraryRoot()));
     if (!isInside(libraryRoot(), target)) throw new Error('Ruta fuera de la biblioteca.');
     shell.showItemInFolder(target);
     return true;
   });
 
-  ipcMain.handle('library:open', async (_event, options = {}) => {
+  ipcMain.handle('library:open', async (event, options = {}) => {
+    assertTrustedIpc(event);
     const target = path.resolve(String(options.path || ''));
     if (!target || !isInside(libraryRoot(), target) || target === path.resolve(libraryRoot())) {
       throw new Error('Archivo fuera de la biblioteca.');
@@ -353,7 +377,7 @@ function configureAutoUpdater() {
   if (!app.isPackaged || !autoUpdater) return;
 
   autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.allowPrerelease = false;
 
   autoUpdater.on('checking-for-update', () => sendUpdateStatus({ state: 'checking' }));
