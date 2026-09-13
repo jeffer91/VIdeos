@@ -8,7 +8,7 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "prestart": "node scripts/copy-ffmpeg.mjs",
+    "prestart": "node scripts/ensure-runtime-deps.mjs && node scripts/copy-ffmpeg.mjs",
     "start": "electron .",
     "start:web": "vite --host 127.0.0.1",
     "prebuild": "node scripts/copy-ffmpeg.mjs",
