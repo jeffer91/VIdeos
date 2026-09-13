@@ -52,7 +52,12 @@ export default function UpdateEnhancer() {
     setNotice('');
     try {
       const result = await window.videosStudio?.updates?.check?.();
-      if (result?.reason === 'development') setNotice('Las actualizaciones automáticas se prueban en la versión instalada.');
+      if (result?.reason === 'development') {
+        setNotice('Las actualizaciones automáticas se comprueban en la versión instalada.');
+      }
+      if (result?.reason === 'updater-unavailable') {
+        setNotice('Esta ejecución no tiene cargado el actualizador. La app puede seguir funcionando; vuelve a instalar o actualiza las dependencias para recuperar las actualizaciones automáticas.');
+      }
     } catch {
       setNotice('No se pudo comprobar la actualización.');
     }
@@ -70,7 +75,10 @@ export default function UpdateEnhancer() {
     if (!confirmed) return;
 
     try {
-      await window.videosStudio?.updates?.install?.();
+      const result = await window.videosStudio?.updates?.install?.();
+      if (result?.reason === 'updater-unavailable') {
+        setNotice('El actualizador no está disponible en esta ejecución.');
+      }
     } catch {
       setNotice('No se pudo iniciar la actualización.');
     }
