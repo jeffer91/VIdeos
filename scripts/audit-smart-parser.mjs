@@ -3,105 +3,126 @@ import { AI_FORMAT_RULES, parseSlides } from '../src/parser.js';
 import { CHANNEL_PROFILE } from '../src/channel.js';
 
 assert.equal(CHANNEL_PROFILE.name, '11 Records', 'El canal predeterminado debe ser 11 Records.');
-assert(AI_FORMAT_RULES.includes('11 Records'), 'El prompt IA debe incluir el nombre 11 Records.');
-assert(AI_FORMAT_RULES.includes('récords'), 'El prompt IA debe conservar el enfoque editorial de récords de fútbol.');
-assert(AI_FORMAT_RULES.includes('PROMPT MAESTRO'), 'La ayuda para IA debe presentarse como prompt maestro, no como reglamento largo.');
-assert(AI_FORMAT_RULES.includes('Este prompt se pega en ChatGPT u otra IA'), 'El prompt debe explicar claramente dónde se pega.');
+assert(AI_FORMAT_RULES.includes('PROMPT MAESTRO'), 'La ayuda para IA debe ser un prompt maestro.');
+assert(AI_FORMAT_RULES.includes('11 RECORDS'), 'El prompt debe identificar 11 Records.');
+assert(AI_FORMAT_RULES.includes('===DIAPOSITIVA 1==='), 'El prompt debe usar separadores fuertes por diapositiva.');
+assert(AI_FORMAT_RULES.includes('===GANCHO==='), 'El prompt debe separar GANCHO.');
+assert(AI_FORMAT_RULES.includes('CUERPO_1='), 'El prompt debe usar campos numerados en CUERPO.');
+assert(AI_FORMAT_RULES.includes('CONTENIDO_1='), 'El prompt debe usar campos numerados en CONTENIDO.');
+assert(AI_FORMAT_RULES.includes('===FIN_LECTURA==='), 'LECTURA debe tener cierre explícito.');
+assert(AI_FORMAT_RULES.includes('===FIN_DIAPOSITIVA 1==='), 'Cada diapositiva debe tener cierre explícito.');
 
-const pastedFromChat = `DIAPOSITIVA 1
+const structured = `===DIAPOSITIVA 1===
 
-GANCHO:
+===GANCHO===
 ¡Esto acaba de cambiar la historia!
 
-TÍTULO:
-Prueba de pegado inteligente
+===TITULO===
+Prueba estructurada
 
-CUERPO:
--  Primer punto con dos espacios.
-– Segundo punto con guion Unicode.
-• Tercer punto con viñeta.
+===CUERPO===
+CUERPO_1=Primer punto.
+CUERPO_2=Segundo punto.
+CUERPO_3=Tercer punto.
 
-CONTENIDO:
--  Dato uno.
-* Dato dos.
-1. Dato tres.
+===CONTENIDO===
+CONTENIDO_1=Dato uno.
+CONTENIDO_2=Dato dos.
+CONTENIDO_3=Dato tres.
 
-LECTURA:
-Esta lectura confirma que el contenido pegado puede normalizarse sin bloquear el proyecto.
+===LECTURA===
+Esta lectura confirma que el nuevo formato se entiende sin depender de Markdown.
+===FIN_LECTURA===
 
-VISUAL:
-TIPO: GRAFICO\\_BARRAS
-DESCRIPCIÓN: Comparativa de prueba.
-Dato 1: A — 10.
-Dato 2: B — 8.
+===VISUAL===
+VISUAL_TIPO=GRAFICO_BARRAS
+VISUAL_DESCRIPCION=Comparativa de prueba.
+VISUAL_DATO_1=A — 10.
+VISUAL_DATO_2=B — 8.
 
-CTA:
-TIPO: PREGUNTA
-TEXTO:
-¿Qué dato te sorprende más?
+===CTA===
+CTA_TIPO=PREGUNTA
+CTA_TEXTO=¿Qué dato te sorprende más?
 
-//
+===FIN_DIAPOSITIVA 1===
 
-DIAPOSITIVA 2
+===DIAPOSITIVA 2===
 
-GANCHO:
+===GANCHO===
 Y esto sigue.
 
-TÍTULO:
+===TITULO===
 Cierre
 
+===CUERPO===
+CUERPO_1=Punto final.
+
+===CONTENIDO===
+CONTENIDO_1=Dato final.
+
+===LECTURA===
+Suscríbete a 11 Records para más récords del fútbol mundial.
+===FIN_LECTURA===
+
+===VISUAL===
+VISUAL_TIPO=IMAGEN
+VISUAL_DESCRIPCION=Imagen final.
+
+===CTA===
+CTA_TIPO=SUSCRIBIRSE
+CTA_TEXTO=Suscríbete a 11 Records.
+
+===FIN_DIAPOSITIVA 2===`;
+
+const parsed = parseSlides(structured);
+assert.deepEqual(parsed.errors, [], `El nuevo formato produjo errores: ${parsed.errors.join(' | ')}`);
+assert.equal(parsed.inputKind, 'structured-script');
+assert.equal(parsed.slides.length, 2);
+assert.equal(parsed.slides[0].visualType, 'GRAFICO_BARRAS');
+assert.equal(parsed.slides[0].ctaType, 'PREGUNTA');
+assert.equal(parsed.slides[1].ctaType, 'SUSCRIBIRSE');
+assert(parsed.slides[0].body.split('\n').every((line) => line.startsWith('- ')), 'CUERPO debe convertirse al formato interno esperado.');
+assert(parsed.slides[0].content.split('\n').every((line) => line.startsWith('- ')), 'CONTENIDO debe convertirse al formato interno esperado.');
+
+const lostLabels = parseSlides(structured
+  .replace('CUERPO_1=Primer punto.', 'Primer punto sin CUERPO_1 porque la IA falló.')
+  .replace('CONTENIDO_1=Dato uno.', 'Dato uno sin CONTENIDO_1.'));
+assert.deepEqual(lostLabels.errors, [], 'El parser debe recuperar líneas internas aunque falte CUERPO_X o CONTENIDO_X.');
+assert(lostLabels.corrections.length >= 2, 'Debe registrar las correcciones automáticas.');
+
+const legacy = `DIAPOSITIVA 1
+GANCHO:
+Gancho legado.
+TÍTULO:
+Título legado.
 CUERPO:
-Punto final sin viñeta porque el portapapeles la perdió.
-
+Punto sin viñeta.
 CONTENIDO:
-Dato final sin viñeta.
-
+Dato sin viñeta.
 LECTURA:
-Suscríbete a 11 Records para más récords brutales del fútbol mundial.
-
+Suscríbete a 11 Records.
 VISUAL:
 TIPO: IMAGEN
-DESCRIPCIÓN: Imagen final.
-
+DESCRIPCIÓN: Imagen.
 CTA:
 TIPO: SUSCRIBIRSE
-TEXTO:
-Suscríbete a 11 Records.
-
+TEXTO: Suscríbete.
 //`;
-
-const parsed = parseSlides(pastedFromChat);
-assert.deepEqual(parsed.errors, [], `El contenido pegado produjo errores bloqueantes: ${parsed.errors.join(' | ')}`);
-assert.equal(parsed.inputKind, 'script', 'Un guion real debe clasificarse como script.');
-assert.equal(parsed.slides.length, 2, 'Deben detectarse las dos diapositivas.');
-assert.equal(parsed.slides[0].visualType, 'GRAFICO_BARRAS', 'Debe normalizar GRAFICO\\_BARRAS.');
-assert.equal(parsed.slides[0].validation.bodyBulleted, true, 'CUERPO debe aceptar variantes de viñetas.');
-assert.equal(parsed.slides[0].validation.contentBulleted, true, 'CONTENIDO debe aceptar variantes de viñetas.');
-assert.equal(parsed.slides[1].validation.bodyBulleted, true, 'CUERPO debe recuperar una viñeta perdida al pegar.');
-assert.equal(parsed.slides[1].validation.contentBulleted, true, 'CONTENIDO debe recuperar una viñeta perdida al pegar.');
-assert(parsed.slides[0].body.split('\n').every((line) => line.startsWith('- ')), 'CUERPO debe quedar normalizado con guion estándar.');
-assert(parsed.slides[0].content.split('\n').every((line) => line.startsWith('- ')), 'CONTENIDO debe quedar normalizado con guion estándar.');
-assert(parsed.slides[1].body.startsWith('- '), 'Una línea de CUERPO sin viñeta debe recibirla automáticamente.');
-assert(parsed.slides[1].content.startsWith('- '), 'Una línea de CONTENIDO sin viñeta debe recibirla automáticamente.');
-assert(parsed.corrections.length >= 1, 'El parser debe informar que realizó autocorrecciones de formato.');
-
-const markdownPaste = parseSlides(`**DIAPOSITIVA 1**\n**GANCHO:**\nGancho.\n**TÍTULO:**\nTítulo.\n**CUERPO:**\nPunto sin guion.\n**CONTENIDO:**\nDato sin guion.\n**LECTURA:**\nSuscríbete a 11 Records.\n**VISUAL:**\nTIPO: IMAGEN\nDESCRIPCIÓN: Imagen.\n**CTA:**\nTIPO: SUSCRIBIRSE\nTEXTO: Suscríbete.\n//`);
-assert.deepEqual(markdownPaste.errors, [], `El pegado con Markdown o pérdida de viñetas no debe romperse: ${markdownPaste.errors.join(' | ')}`);
+const legacyParsed = parseSlides(legacy);
+assert.deepEqual(legacyParsed.errors, [], 'El formato anterior debe seguir funcionando.');
+assert.equal(legacyParsed.inputKind, 'legacy-script');
+assert(legacyParsed.slides[0].body.startsWith('- '), 'El formato anterior debe recuperar viñetas perdidas.');
 
 const promptPaste = parseSlides(AI_FORMAT_RULES);
-assert.equal(promptPaste.inputKind, 'prompt', 'El prompt copiado no debe interpretarse como un video.');
-assert.equal(promptPaste.slides.length, 0, 'El prompt no debe crear diapositivas falsas.');
-assert.equal(promptPaste.errors.length, 1, 'El prompt debe producir un único mensaje útil, no una cascada de errores.');
-assert(promptPaste.errors[0].includes('Pegaste el prompt'), 'El mensaje debe explicar que se pegó el prompt en vez del guion.');
+assert.equal(promptPaste.inputKind, 'prompt');
+assert.equal(promptPaste.slides.length, 0);
+assert.equal(promptPaste.errors.length, 1);
+assert(promptPaste.errors[0].includes('Pegaste el prompt'));
 
-const placeholderTemplate = parseSlides(`DIAPOSITIVA 1\nGANCHO:\n[Gancho potente]\nTÍTULO:\n[Título corto]\nCUERPO:\n- [Idea principal 1]\nCONTENIDO:\n- [Dato 1]\nLECTURA:\n[Texto natural]\nVISUAL:\nTIPO: IMAGEN\nDESCRIPCIÓN: [Imagen]\nCTA:\nTIPO: SUSCRIBIRSE\nTEXTO: [CTA]`);
-assert.equal(placeholderTemplate.inputKind, 'template', 'Una plantilla sin completar debe detectarse como plantilla.');
-assert.equal(placeholderTemplate.slides.length, 0, 'Una plantilla vacía no debe convertirse en proyecto.');
+const mixedPaste = parseSlides(`${AI_FORMAT_RULES}\n\n${structured}`);
+assert.equal(mixedPaste.inputKind, 'structured-script');
+assert.deepEqual(mixedPaste.errors, [], 'Prompt + respuesta deben separarse automáticamente.');
+assert.equal(mixedPaste.slides.length, 2);
+assert(mixedPaste.corrections.some((item) => item.includes('extrajo automáticamente')));
 
-const mixedPaste = parseSlides(`${AI_FORMAT_RULES}\n\n${pastedFromChat}`);
-assert.equal(mixedPaste.inputKind, 'script', 'Si el prompt y el guion vienen mezclados, debe extraerse el guion real.');
-assert.deepEqual(mixedPaste.errors, [], `El guion mezclado con prompt no debe fallar: ${mixedPaste.errors.join(' | ')}`);
-assert.equal(mixedPaste.slides.length, 2, 'Deben extraerse solo las diapositivas reales del contenido mezclado.');
-assert(mixedPaste.corrections.some((item) => item.includes('extrajo automáticamente')), 'Debe informar que separó el prompt del guion.');
-
-console.log(`Auditoría parser inteligente OK · ${parsed.slides.length} diapositivas · prompt y viñetas perdidas manejados correctamente.`);
+console.log(`Auditoría parser inteligente OK · ${parsed.slides.length} diapositivas · prompt estructurado y formato legado validados.`);
