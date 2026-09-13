@@ -1,0 +1,286 @@
+/* Grabación: preparar cámara limpia, ensayar arriba y grabar sin cubrir el encuadre. */
+.recording-flow .slide-flow-header > div {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.recording-view-switch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.recording-view-switch button {
+  min-height: 25px !important;
+  padding: 0 9px !important;
+  border-radius: 999px !important;
+  font-size: 8px !important;
+  font-weight: 750 !important;
+}
+
+.recording-view-switch button.active {
+  border-color: #9bbcff !important;
+  background: #eaf2ff !important;
+  color: #1746a2 !important;
+}
+
+.recording-production-grid {
+  position: relative !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+  gap: 8px !important;
+  align-items: stretch !important;
+}
+
+.recording-production-grid > .camera-production-card,
+.recording-production-grid > .prompter-production-card {
+  grid-column: 1 !important;
+  width: auto !important;
+  max-width: none !important;
+  margin: 0 !important;
+}
+
+.recording-production-grid > .camera-production-card {
+  grid-row: 1 !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+.recording-flow[data-recording-view='camera'] .prompter-production-card {
+  display: none !important;
+}
+
+.recording-flow[data-recording-view='prompter'] .recording-production-grid {
+  grid-template-rows: auto minmax(0, 1fr) !important;
+}
+
+.recording-flow[data-recording-view='prompter'] .prompter-production-card {
+  display: grid !important;
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  justify-self: center !important;
+  width: min(900px, 76%) !important;
+  min-height: 0 !important;
+  padding: 7px 9px 8px !important;
+  grid-template-columns: auto minmax(180px, 1fr) auto !important;
+  grid-template-rows: auto minmax(92px, 118px) !important;
+  gap: 6px 9px !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: 0 5px 16px rgba(15, 23, 42, .08) !important;
+  overflow: visible !important;
+  position: relative !important;
+  z-index: 2 !important;
+}
+
+.recording-flow[data-recording-view='prompter'] .camera-production-card {
+  grid-row: 2 !important;
+}
+
+.prompter-production-card::before {
+  content: '●  MIRA A CÁMARA';
+  position: absolute;
+  left: 50%;
+  top: -18px;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #2563eb;
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, .07);
+}
+
+.recording-flow[data-recording-view='prompter'] .prompter-toolbar {
+  grid-column: 1;
+  grid-row: 1;
+  align-items: center;
+  min-width: max-content;
+}
+
+.recording-flow[data-recording-view='prompter'] .prompter-toolbar > div:first-child {
+  display: none;
+}
+
+.recording-flow[data-recording-view='prompter'] .speed-control {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+}
+
+.recording-flow[data-recording-view='prompter'] .prompter-actions {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: center;
+  min-width: 82px;
+}
+
+/* El ensayo se controla desde la cabecera; el botón interno sigue existiendo para la lógica. */
+.recording-flow .prompter-actions .primary-button {
+  display: none !important;
+}
+
+.recording-flow .prompter-actions .secondary-button {
+  width: 100%;
+}
+
+.recording-flow[data-recording-view='prompter'] .prompter-reading {
+  grid-column: 1 / -1 !important;
+  grid-row: 2 !important;
+  min-height: 0 !important;
+  max-height: 118px !important;
+  overflow-y: auto !important;
+  padding: 12px 34px 54px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  line-height: 1.4 !important;
+  box-shadow: inset 0 1px 0 rgba(37, 99, 235, .07) !important;
+}
+
+.recording-flow[data-recording-view='prompter'] .prompter-reading pre {
+  width: min(650px, 100%);
+  margin: 0 auto !important;
+  text-align: left;
+  white-space: pre-wrap;
+  color: #17212b !important;
+}
+
+/* La vista de cámara debe enseñar exactamente el cuadro capturado: nunca recortar cabeza o bordes. */
+.recording-flow .production-stage video,
+.recording-flow .production-stage .live-video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  background: #000000 !important;
+}
+
+.recording-flow .production-stage .live-video {
+  transform: scaleX(-1);
+}
+
+.framing-guides {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.framing-safe-top,
+.framing-eye-line {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  border-top: 1px dashed rgba(255, 255, 255, .70);
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .55));
+}
+
+.framing-safe-top { top: 11%; }
+.framing-eye-line { top: 39%; }
+.framing-center-line {
+  position: absolute;
+  top: 5%;
+  bottom: 5%;
+  left: 50%;
+  border-left: 1px dashed rgba(255, 255, 255, .30);
+}
+
+.framing-safe-top span,
+.framing-eye-line span {
+  position: absolute;
+  right: 0;
+  top: -15px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .46);
+  color: #ffffff;
+  font-size: 7px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+/* Durante una toma, el prompter queda arriba y los controles secundarios desaparecen. */
+.recording-flow:has(.status-recording),
+.recording-flow:has(.status-paused) {
+  grid-template-rows: auto minmax(0, 1fr) !important;
+}
+
+.recording-flow:has(.status-recording) .slide-mini-rail,
+.recording-flow:has(.status-paused) .slide-mini-rail,
+.recording-flow:has(.status-recording) .recording-topline,
+.recording-flow:has(.status-paused) .recording-topline,
+.recording-flow:has(.status-recording) .capture-meta,
+.recording-flow:has(.status-paused) .capture-meta,
+.recording-flow:has(.status-recording) .recording-view-switch,
+.recording-flow:has(.status-paused) .recording-view-switch {
+  display: none !important;
+}
+
+.recording-flow:has(.status-recording) .slide-flow-header,
+.recording-flow:has(.status-paused) .slide-flow-header {
+  min-height: 27px !important;
+}
+
+.recording-flow:has(.status-recording) .slide-flow-header > button,
+.recording-flow:has(.status-paused) .slide-flow-header > button {
+  visibility: hidden !important;
+}
+
+.recording-flow:has(.status-recording) .recording-production-grid,
+.recording-flow:has(.status-paused) .recording-production-grid {
+  grid-template-rows: auto minmax(0, 1fr) !important;
+}
+
+.recording-flow:has(.status-recording) .prompter-production-card,
+.recording-flow:has(.status-paused) .prompter-production-card {
+  display: grid !important;
+  grid-row: 1 !important;
+  width: min(820px, 72%) !important;
+  grid-template-columns: 1fr !important;
+  grid-template-rows: minmax(88px, 108px) !important;
+  padding: 6px 8px !important;
+}
+
+.recording-flow:has(.status-recording) .camera-production-card,
+.recording-flow:has(.status-paused) .camera-production-card {
+  grid-row: 2 !important;
+  grid-template-rows: minmax(0, 1fr) auto !important;
+}
+
+.recording-flow:has(.status-recording) .prompter-toolbar,
+.recording-flow:has(.status-paused) .prompter-toolbar,
+.recording-flow:has(.status-recording) .speed-control,
+.recording-flow:has(.status-paused) .speed-control,
+.recording-flow:has(.status-recording) .prompter-actions,
+.recording-flow:has(.status-paused) .prompter-actions {
+  display: none !important;
+}
+
+.recording-flow:has(.status-recording) .prompter-reading,
+.recording-flow:has(.status-paused) .prompter-reading {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  max-height: 108px !important;
+  padding: 10px 32px 48px !important;
+}
+
+/* Al revisar una toma desaparece el prompter: el video vuelve a ser protagonista. */
+.recording-flow:has(.status-stopped) .prompter-production-card {
+  display: none !important;
+}
+
+@media (max-width: 1180px) {
+  .recording-flow[data-recording-view='prompter'] .prompter-production-card,
+  .recording-flow:has(.status-recording) .prompter-production-card,
+  .recording-flow:has(.status-paused) .prompter-production-card {
+    width: min(760px, 90%) !important;
+  }
+}
