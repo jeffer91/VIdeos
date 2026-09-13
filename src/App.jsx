@@ -6,6 +6,7 @@ import ProjectManager from './ProjectManager';
 import ProjectBackupManager from './ProjectBackupManager';
 import FinalRenderManager from './FinalRenderManager';
 import SlideEditorManager from './SlideEditorManager';
+import VerificationManager from './VerificationManager';
 import RecordingViewEnhancer from './RecordingViewEnhancer';
 import CutStudioEnhancer from './CutStudioEnhancer';
 import CutSaveStatusBridge from './CutSaveStatusBridge';
@@ -26,6 +27,7 @@ export default function App() {
       <ProjectBackupManager />
       <FinalRenderManager />
       <SlideEditorManager />
+      <VerificationManager />
       <RecordingViewEnhancer />
       <CutStudioEnhancer />
       <CutSaveStatusBridge />
