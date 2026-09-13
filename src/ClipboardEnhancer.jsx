@@ -17,6 +17,18 @@ function legacyCopy(text) {
   return copied;
 }
 
+function downloadPrompt() {
+  const blob = new Blob([`\uFEFF${AI_FORMAT_RULES}`], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'prompt-11-records-videos-studio.txt';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 800);
+}
+
 async function tryNativeCopy(text) {
   const nativeWriter = window.videosStudio?.clipboard?.writeText;
   if (typeof nativeWriter !== 'function') return false;
@@ -42,11 +54,19 @@ async function tryWebCopy(text) {
   }
 }
 
-async function copyRulesReliably() {
+async function copyPromptReliably() {
   if (await tryNativeCopy(AI_FORMAT_RULES)) return 'native';
   if (await tryWebCopy(AI_FORMAT_RULES)) return 'web';
   if (legacyCopy(AI_FORMAT_RULES)) return 'legacy';
   throw new Error('El portapapeles no está disponible.');
+}
+
+function renamePromptButtons() {
+  document.querySelectorAll('button').forEach((button) => {
+    const label = button.textContent.trim();
+    if (label === 'Copiar reglas IA') button.textContent = 'Copiar prompt IA';
+    if (label === 'Descargar reglas') button.textContent = 'Descargar prompt';
+  });
 }
 
 export default function ClipboardEnhancer() {
@@ -56,31 +76,49 @@ export default function ClipboardEnhancer() {
     let resetTimer = 0;
     let noticeTimer = 0;
 
+    renamePromptButtons();
+    const observer = new MutationObserver(renamePromptButtons);
+    observer.observe(document.body, { childList: true, subtree: true });
+
     const handler = async (event) => {
       const button = event.target?.closest?.('button');
-      if (!button || button.textContent.trim() !== 'Copiar reglas IA') return;
+      if (!button) return;
+      const label = button.textContent.trim();
+
+      if (label === 'Descargar prompt' || label === 'Descargar reglas') {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+        downloadPrompt();
+        setNotice({ type: 'success', text: 'Prompt de 11 Records descargado.' });
+        window.clearTimeout(noticeTimer);
+        noticeTimer = window.setTimeout(() => setNotice(null), 2600);
+        return;
+      }
+
+      if (label !== 'Copiar prompt IA' && label !== 'Copiar reglas IA') return;
 
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation?.();
 
-      const originalLabel = 'Copiar reglas IA';
+      const originalLabel = 'Copiar prompt IA';
       button.disabled = true;
       button.textContent = 'Copiando…';
 
       try {
-        await copyRulesReliably();
-        button.textContent = '✓ Reglas copiadas';
+        await copyPromptReliably();
+        button.textContent = '✓ Prompt copiado';
         setNotice({
           type: 'success',
-          text: 'Reglas de 11 Records copiadas. Pégalas en ChatGPT; en “Contenido fuente” pega solo el guion que ChatGPT genere.',
+          text: 'Prompt de 11 Records copiado. Pégalo en ChatGPT y luego pega en Videos Studio únicamente el guion generado.',
         });
       } catch (caught) {
         console.error(caught);
         button.textContent = 'No se pudo copiar';
         setNotice({
           type: 'error',
-          text: 'No se pudieron copiar las reglas. Puedes usar “Descargar reglas” como respaldo.',
+          text: 'No se pudo copiar el prompt. Puedes usar “Descargar prompt” como respaldo.',
         });
       } finally {
         window.clearTimeout(resetTimer);
@@ -97,6 +135,7 @@ export default function ClipboardEnhancer() {
 
     document.addEventListener('click', handler, true);
     return () => {
+      observer.disconnect();
       document.removeEventListener('click', handler, true);
       window.clearTimeout(resetTimer);
       window.clearTimeout(noticeTimer);
