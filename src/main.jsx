@@ -10,5 +10,6 @@ import './light-theme.css';
 import './ux-enhancements.css';
 import './ux-bridge.css';
 import './project-manager.css';
+import './prompter-focus.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
