@@ -1,0 +1,199 @@
+name: Apply audited fixes once
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'Apply audit fixes to Videos Studio'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+
+      - name: Consolidate audited fixes
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          function read(file) { return fs.readFileSync(file, 'utf8'); }
+          function write(file, value) { fs.writeFileSync(file, value, 'utf8'); }
+          function replaceExact(value, from, to, label) {
+            if (!value.includes(from)) throw new Error(`No se encontró el bloque esperado: ${label}`);
+            return value.replace(from, to);
+          }
+
+          // 1) Prompt maestro como flujo nativo, sin depender de un enhancer del DOM.
+          let parser = read('src/parser.js');
+          parser = replaceExact(parser, 'export const AI_FORMAT_RULES = `', 'export const AI_MASTER_PROMPT = `', 'nombre del prompt maestro');
+          parser = replaceExact(
+            parser,
+            '`;\n\nconst VISUAL_TYPES =',
+            '`;\n\n// Alias temporal para compatibilidad con pruebas y módulos antiguos.\nexport const AI_FORMAT_RULES = AI_MASTER_PROMPT;\n\nconst VISUAL_TYPES =',
+            'alias de compatibilidad del prompt',
+          );
+          parser = parser.replace(
+            "warnings: ['El prompt está bien. Videos Studio lo bloqueó para evitar crear diapositivas falsas.'],",
+            'warnings: [],',
+          );
+          write('src/parser.js', parser);
+
+          let production = read('src/ProductionApp.jsx');
+          production = replaceExact(
+            production,
+            "import { AI_FORMAT_RULES, parseSlides } from './parser';",
+            "import { AI_MASTER_PROMPT, parseSlides } from './parser';",
+            'import del prompt',
+          );
+          production = production.replaceAll('AI_FORMAT_RULES', 'AI_MASTER_PROMPT');
+          production = replaceExact(
+            production,
+            `  async function copyAiRules() {\n    try {\n      await navigator.clipboard.writeText(AI_MASTER_PROMPT);\n      setNotice('Reglas copiadas.');\n    } catch {\n      setError('No se pudieron copiar las reglas. Usa Descargar reglas.');\n    }\n  }`,
+            `  async function copyAiPrompt() {\n    try {\n      const nativeWriter = window.videosStudio?.clipboard?.writeText;\n      if (typeof nativeWriter === 'function') {\n        const result = await nativeWriter(AI_MASTER_PROMPT);\n        if (!result?.ok || (result.verified === true && Number(result.length) !== AI_MASTER_PROMPT.length)) {\n          throw new Error('El portapapeles no confirmó la copia completa.');\n        }\n      } else if (navigator.clipboard?.writeText) {\n        await navigator.clipboard.writeText(AI_MASTER_PROMPT);\n      } else {\n        throw new Error('El portapapeles no está disponible.');\n      }\n      setError('');\n      setNotice('Prompt maestro copiado. Pégalo en tu IA, agrega el tema y trae aquí únicamente el guion generado.');\n    } catch (caught) {\n      console.error(caught);\n      setError('No se pudo copiar el prompt. Usa “Descargar prompt” como respaldo.');\n    }\n  }`,
+            'copia nativa del prompt',
+          );
+          production = replaceExact(
+            production,
+            `  function parseContent() {\n    const result = parseSlides(rawText);\n    setParseResult(result);\n    setError(result.errors[0] || '');\n  }`,
+            `  function parseContent() {\n    const result = parseSlides(rawText);\n    setParseResult(result);\n    setError('');\n  }`,
+            'validación sin toast duplicado',
+          );
+          production = replaceExact(
+            production,
+            `    const result = parseSlides(text);\n    setParseResult(result);\n    setError(result.errors[0] || '');\n    event.target.value = '';`,
+            `    const result = parseSlides(text);\n    setParseResult(result);\n    setError('');\n    event.target.value = '';`,
+            'carga TXT sin toast duplicado',
+          );
+          production = replaceExact(
+            production,
+            `    await saveProject(next);\n    setProject(next);`,
+            `    await saveProject(next);\n    window.dispatchEvent(new CustomEvent('videosstudio:project-plan-changed'));\n    setProject(next);`,
+            'evento de proyecto actualizado',
+          );
+          production = replaceExact(
+            production,
+            `<div className="flow-heading"><div><span className="eyebrow">1 · CONTENIDO</span><h1>Cargar estructura del video</h1><p>GANCHO + TÍTULO + CUERPO + CONTENIDO + LECTURA + VISUAL + CTA.</p></div><div className="heading-actions"><button className="secondary-button" onClick={copyAiRules}>Copiar reglas IA</button><button className="secondary-button" onClick={() => downloadText(AI_MASTER_PROMPT, 'reglas-videos-studio.txt')}>Descargar reglas</button></div></div>`,
+            `<div className="flow-heading"><div><span className="eyebrow">1 · CONTENIDO</span><h1>Cargar guion del video</h1><p>Copia el prompt maestro en tu IA y pega aquí únicamente la respuesta estructurada.</p></div><div className="heading-actions"><button className="secondary-button" onClick={copyAiPrompt}>Copiar prompt IA</button><button className="secondary-button" onClick={() => downloadText(AI_MASTER_PROMPT, 'prompt-maestro-11-records-videos-studio.txt')}>Descargar prompt</button></div></div>`,
+            'acciones de prompt nativas',
+          );
+          production = replaceExact(
+            production,
+            `placeholder={'DIAPOSITIVA 1\\nGANCHO:\\n...\\n\\nTÍTULO:\\n...\\n\\nCUERPO:\\n- ...\\n\\nCONTENIDO:\\n- ...\\n\\nLECTURA:\\n...\\n\\nVISUAL:\\nTIPO: IMAGEN\\nDESCRIPCIÓN: ...\\n\\nCTA:\\nTIPO: NINGUNO\\n\\n//'}`,
+            `placeholder={'===DIAPOSITIVA 1===\\n\\n===GANCHO===\\n...\\n\\n===TITULO===\\n...\\n\\n===CUERPO===\\nCUERPO_1=...\\nCUERPO_2=...\\n\\n===CONTENIDO===\\nCONTENIDO_1=...\\nCONTENIDO_2=...\\n\\n===LECTURA===\\n...\\n===FIN_LECTURA===\\n\\n===VISUAL===\\nVISUAL_TIPO=IMAGEN\\nVISUAL_DESCRIPCION=...\\n\\n===CTA===\\nCTA_TIPO=NINGUNO\\nCTA_TEXTO=\\n\\n===FIN_DIAPOSITIVA 1==='}`,
+            'placeholder del formato estructurado',
+          );
+          production = replaceExact(
+            production,
+            `{!!parseResult.errors.length && <div className="validation error-box">{parseResult.errors.map((item) => <div key={item}>• {item}</div>)}</div>}`,
+            `{!!parseResult.errors.length && <div className={\`validation ${parseResult.inputKind === 'prompt' ? 'warning-box' : 'error-box'}\`}>{parseResult.errors.map((item) => <div key={item}>• {item}</div>)}</div>}`,
+            'estilo contextual de validación',
+          );
+          write('src/ProductionApp.jsx', production);
+
+          let app = read('src/App.jsx');
+          app = app.replace("import ClipboardEnhancer from './ClipboardEnhancer';\n", '');
+          app = app.replace('      <ClipboardEnhancer />\n', '');
+          write('src/App.jsx', app);
+          if (fs.existsSync('src/ClipboardEnhancer.jsx')) fs.rmSync('src/ClipboardEnhancer.jsx');
+
+          // 2) Menos polling: los eventos son la vía principal y queda un refresco de respaldo más espaciado.
+          let projects = read('src/ProjectManager.jsx');
+          projects = replaceExact(
+            projects,
+            `    const timer = window.setInterval(() => refreshProjects().catch(() => {}), 1800);\n    return () => window.clearInterval(timer);`,
+            `    const onProjectChange = () => refreshProjects().catch(() => {});\n    const timer = window.setInterval(onProjectChange, 10000);\n    window.addEventListener('videosstudio:project-plan-changed', onProjectChange);\n    return () => {\n      window.clearInterval(timer);\n      window.removeEventListener('videosstudio:project-plan-changed', onProjectChange);\n    };`,
+            'refresco de proyectos por eventos',
+          );
+          write('src/ProjectManager.jsx', projects);
+
+          let workflow = read('src/WorkflowEnhancer.jsx');
+          workflow = workflow.replace(
+            'const timer = window.setInterval(() => refreshData().catch(() => {}), 1800);',
+            'const timer = window.setInterval(() => refreshData().catch(() => {}), 10000);',
+          );
+          write('src/WorkflowEnhancer.jsx', workflow);
+
+          // 3) Electron: origen más estricto, IPC de biblioteca protegido y actualización solo por acción explícita.
+          let main = read('electron/main.cjs');
+          main = replaceExact(
+            main,
+            "const fs = require('node:fs/promises');",
+            "const fs = require('node:fs/promises');\nconst { fileURLToPath } = require('node:url');",
+            'fileURLToPath',
+          );
+          main = replaceExact(
+            main,
+            `function isTrustedRendererOrigin(value = '') {\n  return (\n    value.startsWith('http://127.0.0.1:') ||\n    value.startsWith('http://localhost:') ||\n    value.startsWith('file://')\n  );\n}`,
+            `function isTrustedRendererOrigin(value = '') {\n  if (!value) return false;\n  if (!app.isPackaged) {\n    return /^http:\\/\\/(?:127\\.0\\.0\\.1|localhost):\\d+(?:\\/|$)/i.test(value);\n  }\n  try {\n    const parsed = new URL(value);\n    if (parsed.protocol !== 'file:') return false;\n    const target = fileURLToPath(parsed);\n    return isInside(path.join(app.getAppPath(), 'dist'), target);\n  } catch {\n    return false;\n  }\n}`,
+            'origen confiable',
+          );
+          main = replaceExact(
+            main,
+            `function configureClipboardIpc() {\n  ipcMain.handle('clipboard:write-text', (event, value = '') => {\n    const senderUrl = event.senderFrame?.url || event.sender?.getURL?.() || '';\n    if (!isTrustedRendererOrigin(senderUrl)) throw new Error('Origen no autorizado para usar el portapapeles.');`,
+            `function assertTrustedIpc(event) {\n  const senderUrl = event?.senderFrame?.url || event?.sender?.getURL?.() || '';\n  if (!isTrustedRendererOrigin(senderUrl)) throw new Error('Origen no autorizado para usar esta función.');\n}\n\nfunction configureClipboardIpc() {\n  ipcMain.handle('clipboard:write-text', (event, value = '') => {\n    assertTrustedIpc(event);`,
+            'guard común de IPC',
+          );
+
+          const handlerReplacements = [
+            ["ipcMain.handle('library:import', async (_event, options = {}) => {", "ipcMain.handle('library:import', async (event, options = {}) => {\n    assertTrustedIpc(event);"],
+            ["ipcMain.handle('library:list', async (_event, options = {}) => listDirectory(options));", "ipcMain.handle('library:list', async (event, options = {}) => {\n    assertTrustedIpc(event);\n    return listDirectory(options);\n  });"],
+            ["ipcMain.handle('library:delete', async (_event, options = {}) => {", "ipcMain.handle('library:delete', async (event, options = {}) => {\n    assertTrustedIpc(event);"],
+            ["ipcMain.handle('library:set-default', async (_event, options = {}) => {", "ipcMain.handle('library:set-default', async (event, options = {}) => {\n    assertTrustedIpc(event);"],
+            ["ipcMain.handle('library:get-defaults', async () => readDefaults());", "ipcMain.handle('library:get-defaults', async (event) => {\n    assertTrustedIpc(event);\n    return readDefaults();\n  });"],
+            ["ipcMain.handle('library:read-data-url', async (_event, options = {}) => {", "ipcMain.handle('library:read-data-url', async (event, options = {}) => {\n    assertTrustedIpc(event);"],
+            ["ipcMain.handle('library:reveal', async (_event, options = {}) => {", "ipcMain.handle('library:reveal', async (event, options = {}) => {\n    assertTrustedIpc(event);"],
+            ["ipcMain.handle('library:open', async (_event, options = {}) => {", "ipcMain.handle('library:open', async (event, options = {}) => {\n    assertTrustedIpc(event);"],
+          ];
+          for (const [from, to] of handlerReplacements) main = replaceExact(main, from, to, from);
+          main = main.replace('autoUpdater.autoInstallOnAppQuit = true;', 'autoUpdater.autoInstallOnAppQuit = false;');
+          write('electron/main.cjs', main);
+
+          // 4) Auditoría actualizada: exige el flujo nativo y evita que vuelva el enhancer antiguo.
+          write('scripts/audit-clipboard.mjs', `import assert from 'node:assert/strict';\nimport { existsSync } from 'node:fs';\nimport { readFile } from 'node:fs/promises';\nimport path from 'node:path';\nimport { fileURLToPath } from 'node:url';\nimport { AI_FORMAT_RULES, AI_MASTER_PROMPT, parseSlides } from '../src/parser.js';\n\nconst __filename = fileURLToPath(import.meta.url);\nconst __dirname = path.dirname(__filename);\nconst root = path.resolve(__dirname, '..');\nconst read = (file) => readFile(path.join(root, file), 'utf8');\n\nassert.equal(AI_FORMAT_RULES, AI_MASTER_PROMPT, 'El alias antiguo debe apuntar al prompt maestro actual.');\nassert(AI_MASTER_PROMPT.includes('PROMPT MAESTRO'), 'Debe existir un prompt maestro.');\nassert(AI_MASTER_PROMPT.includes('===DIAPOSITIVA 1==='), 'El prompt debe usar el formato estructurado.');\nassert(AI_MASTER_PROMPT.includes('CUERPO_1='), 'CUERPO debe usar campos numerados.');\nassert(AI_MASTER_PROMPT.includes('CONTENIDO_1='), 'CONTENIDO debe usar campos numerados.');\n\nconst production = await read('src/ProductionApp.jsx');\nconst appSource = await read('src/App.jsx');\nconst preload = await read('electron/preload.cjs');\nconst main = await read('electron/main.cjs');\n\nassert(production.includes('Copiar prompt IA'), 'La interfaz debe mostrar Copiar prompt IA de forma nativa.');\nassert(production.includes('Descargar prompt'), 'La interfaz debe mostrar Descargar prompt de forma nativa.');\nassert(production.includes('prompt-maestro-11-records-videos-studio.txt'), 'La descarga debe tener un nombre claro.');\nassert(production.includes('AI_MASTER_PROMPT'), 'ProductionApp debe usar directamente el prompt maestro.');\nassert(production.includes("window.videosStudio?.clipboard?.writeText"), 'La copia debe priorizar el portapapeles nativo de Electron.');\nassert(production.includes('===DIAPOSITIVA 1==='), 'El cuadro de pegado debe enseñar el formato nuevo.');\nassert(!production.includes('Copiar reglas IA'), 'No deben quedar controles antiguos de reglas.');\nassert(!appSource.includes('ClipboardEnhancer'), 'La app no debe depender de un enhancer para renombrar botones.');\nassert(!existsSync(path.join(root, 'src/ClipboardEnhancer.jsx')), 'El enhancer antiguo debe haberse eliminado.');\nassert(preload.includes("ipcRenderer.invoke('clipboard:write-text', text)"), 'Preload debe exponer el canal seguro de portapapeles.');\nassert(main.includes("ipcMain.handle('clipboard:write-text'"), 'Electron main debe implementar el portapapeles.');\nassert(main.includes('assertTrustedIpc(event)'), 'Los IPC sensibles deben validar el origen.');\nassert(main.includes('autoUpdater.autoInstallOnAppQuit = false'), 'Una actualización descargada no debe instalarse sin acción explícita.');\n\nconst sample = \`===DIAPOSITIVA 1===\\n===GANCHO===\\nEsto cambia todo.\\n===TITULO===\\nPrueba\\n===CUERPO===\\nCUERPO_1=Punto uno.\\n===CONTENIDO===\\nCONTENIDO_1=Dato uno.\\n===LECTURA===\\nSuscríbete a 11 Records.\\n===FIN_LECTURA===\\n===VISUAL===\\nVISUAL_TIPO=IMAGEN\\nVISUAL_DESCRIPCION=Imagen de prueba.\\n===CTA===\\nCTA_TIPO=SUSCRIBIRSE\\nCTA_TEXTO=Suscríbete.\\n===FIN_DIAPOSITIVA 1===\`;\nconst parsed = parseSlides(sample);\nassert.equal(parsed.errors.length, 0, \`El formato del prompt debe ser aceptado: \${parsed.errors.join(' | ')}\`);\nassert.equal(parsed.slides.length, 1);\nassert.equal(parsed.inputKind, 'structured-script');\n\nconsole.log(\`Auditoría portapapeles OK · \${AI_MASTER_PROMPT.length} caracteres · prompt nativo, formato estructurado e IPC validados.\`);\n`);
+
+          // 5) README coherente con el nuevo flujo.
+          let readme = read('README.md');
+          if (!readme.includes('## Prompt IA')) {
+            readme = readme.replace(
+              '## Política de clips\n',
+              `## Prompt IA\n\nEn **Contenido**, usa **Copiar prompt IA**, pégalo en ChatGPT u otra IA y añade el tema del video. Después copia únicamente la respuesta generada, que debe comenzar con \`===DIAPOSITIVA 1===\`, y pégala en Videos Studio. La app conserva compatibilidad con el formato anterior, pero el formato estructurado con separadores \`===\` es el recomendado.\n\n## Política de clips\n`,
+            );
+          }
+          write('README.md', readme);
+
+          console.log('Correcciones de auditoría aplicadas.');
+          NODE
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Audit Videos Studio
+        run: npm run audit
+
+      - name: Build renderer
+        run: npm run build
+
+      - name: Commit audited fixes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "Consolidate audited app flow"
+          git push origin main
