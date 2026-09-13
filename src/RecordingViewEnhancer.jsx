@@ -20,10 +20,12 @@ function prompterToggle(flow) {
 export default function RecordingViewEnhancer() {
   const [flow, setFlow] = useState(null);
   const [headerTarget, setHeaderTarget] = useState(null);
+  const [toolsTarget, setToolsTarget] = useState(null);
   const [stageTarget, setStageTarget] = useState(null);
   const [viewMode, setViewMode] = useState('camera');
   const [guides, setGuides] = useState(true);
   const [status, setStatus] = useState('idle');
+  const [statusText, setStatusText] = useState('');
   const [practiceRunning, setPracticeRunning] = useState(false);
   const lastSlideRef = useRef('');
   const manualModeRef = useRef('camera');
@@ -36,11 +38,14 @@ export default function RecordingViewEnhancer() {
       const nextFlow = document.querySelector('.recording-flow');
       setFlow(nextFlow || null);
       setHeaderTarget(nextFlow?.querySelector('.slide-flow-header > div') || null);
+      setToolsTarget(nextFlow?.querySelector('.recording-production-grid') || null);
       setStageTarget(nextFlow?.querySelector('.production-stage') || null);
 
       if (!nextFlow) return;
       const nextStatus = recordingState(nextFlow);
       setStatus(nextStatus);
+      const visibleStatus = nextFlow.querySelector('.recording-topline .status-pill')?.textContent?.trim() || '';
+      setStatusText(visibleStatus);
       const toggle = prompterToggle(nextFlow);
       setPracticeRunning(Boolean(toggle && /pausar/i.test(toggle.textContent || '')));
 
@@ -91,8 +96,15 @@ export default function RecordingViewEnhancer() {
     });
   }
 
-  const controls = headerTarget ? createPortal(
-    <div className="recording-view-switch" aria-label="Vista de grabación">
+  const showPreparationTools = !['recording', 'paused', 'saving', 'stopped'].includes(status);
+
+  const headerStatus = headerTarget && statusText ? createPortal(
+    <span className={`recording-header-status state-${status}`}>{statusText}</span>,
+    headerTarget,
+  ) : null;
+
+  const controls = toolsTarget && showPreparationTools ? createPortal(
+    <div className="recording-view-switch" aria-label="Preparación de grabación">
       <button
         type="button"
         className={viewMode === 'camera' ? 'active' : ''}
@@ -107,7 +119,7 @@ export default function RecordingViewEnhancer() {
         onClick={togglePractice}
         disabled={['recording', 'paused', 'saving'].includes(status)}
       >
-        {practiceRunning ? 'Pausar ensayo' : 'Ensayar prompter'}
+        {practiceRunning ? 'Pausar ensayo' : 'Prompter'}
       </button>
       <button
         type="button"
@@ -118,7 +130,7 @@ export default function RecordingViewEnhancer() {
         Guías
       </button>
     </div>,
-    headerTarget,
+    toolsTarget,
   ) : null;
 
   const guideOverlay = stageTarget && guides && viewMode === 'camera' && !['recording', 'paused', 'saving', 'stopped'].includes(status)
@@ -132,5 +144,5 @@ export default function RecordingViewEnhancer() {
     )
     : null;
 
-  return <>{controls}{guideOverlay}</>;
+  return <>{headerStatus}{controls}{guideOverlay}</>;
 }
