@@ -22,11 +22,10 @@ if (!missing.length) process.exit(0);
 console.log(`Videos Studio detectó dependencias nuevas sin instalar: ${missing.join(', ')}.`);
 console.log('Intentando completar la instalación automáticamente...');
 
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const result = spawnSync(npmCommand, ['install', '--no-audit', '--no-fund'], {
+const result = spawnSync('npm', ['install', '--no-audit', '--no-fund'], {
   cwd: root,
   stdio: 'inherit',
-  shell: false,
+  shell: process.platform === 'win32',
 });
 
 if (result.status === 0) {
