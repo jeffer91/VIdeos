@@ -258,8 +258,10 @@ export default function WorkflowEnhancer() {
     if (!project) return;
     if (view === 'cut') {
       const index = stats.slides.findIndex((slide) => stats.takeMap[slide.number]?.accepted && !stats.takeMap[slide.number]?.hasCleanedBlob);
-      if (index >= 0) document.querySelectorAll('.cut-list button')[index]?.click();
-      return;
+      if (index >= 0) {
+        document.querySelectorAll('.cut-list button')[index]?.click();
+        return;
+      }
     }
     if (view === 'join') {
       const index = stats.slides.findIndex((slide) => {
@@ -268,8 +270,10 @@ export default function WorkflowEnhancer() {
         const mounted = Boolean(project.productionPlan?.scenes?.[slide.number]?.ready);
         return hasClean && (!hasVisual || !mounted);
       });
-      if (index >= 0) document.querySelectorAll('.join-scene-list button')[index]?.click();
-      return;
+      if (index >= 0) {
+        document.querySelectorAll('.join-scene-list button')[index]?.click();
+        return;
+      }
     }
     if (!recommendation) return;
     const result = await requestProductionNavigation(recommendation.key, { timeoutMs: 6000 });
