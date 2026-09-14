@@ -1,33 +1,58 @@
 .recording-continue-button {
-  margin-left: 8px;
-  min-height: 28px;
-  padding: 0 12px;
+  min-height: 34px;
+  padding: 0 14px;
   border: 1px solid #2f5bd8;
-  border-radius: 9px;
+  border-radius: 10px;
   background: #2f5bd8;
   color: #fff;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 850;
   white-space: nowrap;
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(47, 91, 216, .16);
 }
 
-.recording-continue-button:hover {
+.recording-continue-button:hover:not(:disabled) {
   background: #244bb8;
   border-color: #244bb8;
 }
 
+.recording-continue-button:disabled {
+  opacity: .65;
+  cursor: wait;
+}
+
+.recording-advance-notice {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  max-width: 330px;
+  padding: 7px 10px;
+  border: 1px solid #f0c9c9;
+  border-radius: 9px;
+  background: #fff7f7;
+  color: #9f2727;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.35;
+  box-shadow: 0 6px 18px rgba(40, 53, 71, .09);
+}
+
+.recording-flow .record-actions {
+  position: relative;
+}
+
 .recording-flow:has(.status-recording) .recording-continue-button,
 .recording-flow:has(.status-paused) .recording-continue-button,
-.recording-flow:has(.status-saving) .recording-continue-button {
+.recording-flow:has(.status-saving) .recording-continue-button,
+.recording-flow:has(.status-detecting) .recording-continue-button {
   display: none;
 }
 
 @media (max-width: 1050px) {
   .recording-continue-button {
-    flex-basis: 100%;
-    margin-left: 0;
-    margin-top: 4px;
+    min-height: 32px;
+    padding: 0 10px;
   }
 }
