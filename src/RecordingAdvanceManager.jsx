@@ -30,7 +30,9 @@ export default function RecordingAdvanceManager() {
     if (!root) return undefined;
     const sync = () => {
       const flow = document.querySelector('.recording-flow');
-      setTarget(flow?.querySelector('.record-actions') || null);
+      const stableReview = Boolean(flow?.querySelector('.status-stopped'));
+      const hasRecovery = Boolean(flow?.querySelector('.recovery-banner'));
+      setTarget(stableReview && !hasRecovery ? flow?.querySelector('.record-actions') || null : null);
     };
     const observer = new MutationObserver(sync);
     observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
@@ -81,8 +83,8 @@ export default function RecordingAdvanceManager() {
   }
 
   useEffect(() => {
-    if (!project?.id || !next || !document.querySelector('.recording-flow')) return undefined;
-    const storageKey = `videosstudio:auto-resume:${project.id}:${next.key}`;
+    if (!project?.id || !next || !target || !document.querySelector('.recording-flow')) return undefined;
+    const storageKey = `videosstudio:auto-resume:${project.id}`;
     if (sessionStorage.getItem(storageKey) === 'done') return undefined;
 
     let cancelled = false;
@@ -104,7 +106,7 @@ export default function RecordingAdvanceManager() {
       window.clearTimeout(startTimer);
       window.clearTimeout(retryTimer);
     };
-  }, [project?.id, next?.key]);
+  }, [project?.id, next?.key, target]);
 
   if (!target || !next) return null;
 
