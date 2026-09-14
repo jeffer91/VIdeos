@@ -1,0 +1,33 @@
+.recording-continue-button {
+  margin-left: 8px;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 1px solid #2f5bd8;
+  border-radius: 9px;
+  background: #2f5bd8;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 850;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(47, 91, 216, .16);
+}
+
+.recording-continue-button:hover {
+  background: #244bb8;
+  border-color: #244bb8;
+}
+
+.recording-flow:has(.status-recording) .recording-continue-button,
+.recording-flow:has(.status-paused) .recording-continue-button,
+.recording-flow:has(.status-saving) .recording-continue-button {
+  display: none;
+}
+
+@media (max-width: 1050px) {
+  .recording-continue-button {
+    flex-basis: 100%;
+    margin-left: 0;
+    margin-top: 4px;
+  }
+}
