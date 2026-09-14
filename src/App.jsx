@@ -9,6 +9,7 @@ import SlideEditorManager from './SlideEditorManager';
 import VerificationManager from './VerificationManager';
 import PromptVerificationGuard from './PromptVerificationGuard';
 import RecordingViewEnhancer from './RecordingViewEnhancer';
+import RecordingAdvanceManager from './RecordingAdvanceManager';
 import CutStudioEnhancer from './CutStudioEnhancer';
 import CutSaveStatusBridge from './CutSaveStatusBridge';
 import IntegrityGuard from './IntegrityGuard';
@@ -31,6 +32,7 @@ export default function App() {
       <VerificationManager />
       <PromptVerificationGuard />
       <RecordingViewEnhancer />
+      <RecordingAdvanceManager />
       <CutStudioEnhancer />
       <CutSaveStatusBridge />
       <IntegrityGuard />
