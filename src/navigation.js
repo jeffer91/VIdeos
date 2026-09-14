@@ -36,7 +36,7 @@ function findNavigationButton(key) {
 
 function navigationBlockedByRecording() {
   return Boolean(document.querySelector(
-    '.recording-flow .status-recording, .recording-flow .status-paused, .recording-flow .status-saving, .recording-flow .rec-indicator',
+    '.recording-flow .status-detecting, .recording-flow .status-recording, .recording-flow .status-paused, .recording-flow .status-saving, .recording-flow .rec-indicator',
   ));
 }
 
