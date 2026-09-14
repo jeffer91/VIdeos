@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getActiveProject, getProjectTakeMetadata, saveProject } from './storage';
 import { getVisualCountsBySlide } from './visualStore';
+import { requestProductionNavigation, viewLabel } from './navigation';
 
-const NAV_KEYS = ['content', 'recording', 'cut', 'library', 'join', 'memes', 'result'];
 const INHERIT = '__inherit__';
 const NONE = '__none__';
 
@@ -15,12 +15,6 @@ function detectView() {
   if (document.querySelector('.memes-flow')) return 'memes';
   if (document.querySelector('.result-flow')) return 'result';
   return '';
-}
-
-function clickNav(key) {
-  const index = NAV_KEYS.indexOf(key);
-  if (index < 0) return;
-  document.querySelectorAll('.production-nav button')[index]?.click();
 }
 
 function resolveChoice(value, fallback = '') {
@@ -260,7 +254,7 @@ export default function WorkflowEnhancer() {
     return { key: 'result', label: 'Revisar resultado' };
   }, [project, stats]);
 
-  function goNextPending() {
+  async function goNextPending() {
     if (!project) return;
     if (view === 'cut') {
       const index = stats.slides.findIndex((slide) => stats.takeMap[slide.number]?.accepted && !stats.takeMap[slide.number]?.hasCleanedBlob);
@@ -277,7 +271,14 @@ export default function WorkflowEnhancer() {
       if (index >= 0) document.querySelectorAll('.join-scene-list button')[index]?.click();
       return;
     }
-    if (recommendation) clickNav(recommendation.key);
+    if (!recommendation) return;
+    const result = await requestProductionNavigation(recommendation.key, { timeoutMs: 6000 });
+    if (!result.ok) {
+      setBridgeNotice({
+        type: 'error',
+        text: `No se pudo abrir ${viewLabel(recommendation.key)}. El proyecto permanece guardado; intenta nuevamente.`,
+      });
+    }
   }
 
   if (!project || !stats.total) return null;
