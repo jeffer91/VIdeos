@@ -948,14 +948,41 @@ export default function ProductionApp() {
     if (view === 'join' || view === 'memes' || view === 'result') refreshResourcePool();
   }, [view, project?.id]);
 
-  function navigate(nextView) {
+  function navigationBlockReason(nextView) {
+    if (nextView === view) return '';
     if (['recording', 'paused', 'saving'].includes(status)) {
-      setError('Finaliza la grabación antes de cambiar de pantalla.');
-      return;
+      return 'Finaliza la grabación antes de cambiar de pantalla.';
+    }
+    if (status === 'detecting') {
+      return 'Espera a que termine la detección de cámara y micrófono antes de cambiar de pantalla.';
+    }
+    if (view === 'recording' && recoveryMeta) {
+      return 'Recupera o descarta la grabación interrumpida antes de salir de Grabación.';
+    }
+    return '';
+  }
+
+  function navigate(nextView) {
+    if (!NAV_ITEMS.some(([key]) => key === nextView)) return false;
+    const blocked = navigationBlockReason(nextView);
+    if (blocked) {
+      setError(blocked);
+      return false;
     }
     setError('');
     setView(nextView);
+    return true;
   }
+
+  useEffect(() => {
+    const handleNavigationRequest = (event) => {
+      const nextView = event?.detail?.view;
+      if (!nextView) return;
+      navigate(nextView);
+    };
+    window.addEventListener('videosstudio:navigate', handleNavigationRequest);
+    return () => window.removeEventListener('videosstudio:navigate', handleNavigationRequest);
+  }, [view, status, recoveryMeta]);
 
   function invalidateScene(scenes, slideNumber) {
     const next = { ...(scenes || {}) };
