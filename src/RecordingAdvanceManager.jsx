@@ -66,14 +66,14 @@ export default function RecordingAdvanceManager() {
     return { key: 'result', label: 'Ver Resultado →' };
   }, [progress]);
 
-  async function goNext({ automatic = false } = {}) {
+  async function goNext() {
     if (!next || navigating) return false;
     setNavigating(true);
-    if (!automatic) setNotice('');
+    setNotice('');
     try {
-      const result = await requestProductionNavigation(next.key, { timeoutMs: automatic ? 8000 : 6000 });
+      const result = await requestProductionNavigation(next.key, { timeoutMs: 3000 });
       if (result.ok) return true;
-      if (!automatic && mountedRef.current) {
+      if (mountedRef.current) {
         setNotice(`No se pudo abrir ${viewLabel(next.key)}. Intenta nuevamente; tus grabaciones siguen guardadas.`);
       }
       return false;
@@ -81,32 +81,6 @@ export default function RecordingAdvanceManager() {
       if (mountedRef.current) setNavigating(false);
     }
   }
-
-  useEffect(() => {
-    if (!project?.id || !next || !target || !document.querySelector('.recording-flow')) return undefined;
-    const storageKey = `videosstudio:auto-resume:${project.id}`;
-    if (sessionStorage.getItem(storageKey) === 'done') return undefined;
-
-    let cancelled = false;
-    let retryTimer = 0;
-    const attempt = async () => {
-      if (cancelled) return;
-      const ok = await goNext({ automatic: true });
-      if (cancelled) return;
-      if (ok) {
-        sessionStorage.setItem(storageKey, 'done');
-        return;
-      }
-      retryTimer = window.setTimeout(attempt, 1200);
-    };
-
-    const startTimer = window.setTimeout(attempt, 500);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(startTimer);
-      window.clearTimeout(retryTimer);
-    };
-  }, [project?.id, next?.key, target]);
 
   if (!target || !next) return null;
 
