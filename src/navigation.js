@@ -27,63 +27,30 @@ export function isProductionViewActive(key) {
   return Boolean(selector && document.querySelector(selector));
 }
 
-function findNavigationButton(key) {
-  const expected = VIEW_LABELS[key];
-  if (!expected) return null;
-  return [...document.querySelectorAll('.production-nav > button')]
-    .find((button) => (button.textContent || '').trim().startsWith(expected)) || null;
-}
-
-function navigationBlockedByRecording() {
-  return Boolean(document.querySelector(
-    '.recording-flow .recovery-banner, .recording-flow .status-detecting, .recording-flow .status-recording, .recording-flow .status-paused, .recording-flow .status-saving, .recording-flow .rec-indicator',
-  ));
-}
-
 /**
- * Single navigation bridge for enhancer modules.
- * ProductionApp remains the owner of the actual view state; this helper waits
- * until its real navigation control is available and verifies that the target
- * view actually mounted before reporting success.
+ * Shared navigation bridge for enhancer modules.
+ * ProductionApp owns the view state. Enhancers request a view change through
+ * a custom event instead of locating a navigation button and simulating a click.
  */
 export async function requestProductionNavigation(key, options = {}) {
   const selector = VIEW_SELECTORS[key];
   if (!selector) return { ok: false, reason: 'unknown-view' };
   if (isProductionViewActive(key)) return { ok: true, alreadyActive: true };
 
-  const timeoutMs = Math.max(800, Number(options.timeoutMs) || 6000);
-  const retryMs = Math.max(60, Number(options.retryMs) || 120);
+  const timeoutMs = Math.max(500, Number(options.timeoutMs) || 3000);
+  const retryMs = Math.max(40, Number(options.retryMs) || 80);
   const startedAt = Date.now();
-  let lastReason = 'navigation-unavailable';
+
+  window.dispatchEvent(new CustomEvent('videosstudio:navigate', {
+    detail: { view: key },
+  }));
 
   while (Date.now() - startedAt < timeoutMs) {
     if (isProductionViewActive(key)) return { ok: true };
-
-    if (navigationBlockedByRecording()) {
-      lastReason = 'recording-busy';
-      await delay(retryMs);
-      continue;
-    }
-
-    const button = findNavigationButton(key);
-    if (!button) {
-      lastReason = 'nav-not-mounted';
-      await delay(retryMs);
-      continue;
-    }
-    if (button.disabled) {
-      lastReason = 'nav-disabled';
-      await delay(retryMs);
-      continue;
-    }
-
-    button.click();
     await delay(retryMs);
-    if (isProductionViewActive(key)) return { ok: true };
-    lastReason = 'view-did-not-change';
   }
 
-  return { ok: false, reason: lastReason };
+  return { ok: false, reason: 'view-did-not-change' };
 }
 
 export function viewLabel(key) {
