@@ -488,7 +488,7 @@ function validateStoryStructure(slides, errors, warnings) {
     if (slide.number !== expected) errors.push(`La numeración debe ser consecutiva. Se esperaba DIAPOSITIVA ${expected} y se encontró DIAPOSITIVA ${slide.number}.`);
   });
 
-  if (!slides[0].hook?.trim()) warnings.push(`La primera diapositiva no tiene GANCHO. Un video de ${CHANNEL_PROFILE.name} debería abrir con una razón clara para seguir mirando.`);
+  if (!slides[0].hook?.trim()) warnings.push('La primera diapositiva no tiene GANCHO. El video debería abrir con una razón clara para seguir mirando.');
 
   if (slides.length >= 3) {
     const middleIndex = Math.floor((slides.length - 1) / 2);
@@ -497,7 +497,7 @@ function validateStoryStructure(slides, errors, warnings) {
   }
 
   const last = slides[slides.length - 1];
-  if (last.ctaType !== 'SUSCRIBIRSE') warnings.push(`Diapositiva ${last.number}: el CTA final debería ser TIPO: SUSCRIBIRSE para ${CHANNEL_PROFILE.name}.`);
+  if (last.ctaType !== 'SUSCRIBIRSE') warnings.push(`Diapositiva ${last.number}: el CTA final debería ser TIPO: SUSCRIBIRSE.`);
 
   const titleKeys = new Map();
   for (const slide of slides) {
@@ -725,7 +725,7 @@ export function parseSlides(rawText = '') {
     } else {
       return {
         slides: [],
-        errors: [`Pegaste el prompt de ${CHANNEL_PROFILE.name}, no la respuesta de la IA. Pega el prompt en ChatGPT y luego copia aquí únicamente el guion que ChatGPT genere.`],
+        errors: ['Pegaste el prompt maestro, no la respuesta de la IA. Pega el prompt en tu IA y luego copia aquí únicamente el guion generado.'],
         warnings: [],
         corrections: [],
         inputKind: 'prompt',

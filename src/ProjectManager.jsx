@@ -32,7 +32,11 @@ function formatUpdated(value) {
   }
 }
 
-export default function ProjectManager() {
+function projectMode(project) {
+  return project?.contentMode || 'football';
+}
+
+export default function ProjectManager({ contentMode = 'football' }) {
   const launchModeRef = useRef(sessionStorage.getItem(LAUNCH_MODE_KEY) || '');
   const [headerTarget, setHeaderTarget] = useState(null);
   const [activeProject, setActiveProjectState] = useState(null);
@@ -47,8 +51,8 @@ export default function ProjectManager() {
       getActiveProject(),
       listProjects(),
     ]);
-    setActiveProjectState(active || null);
-    setProjects(rows || []);
+    setActiveProjectState(active && projectMode(active) === contentMode ? active : null);
+    setProjects((rows || []).filter((project) => projectMode(project) === contentMode));
     setHydrated(true);
   }
 
@@ -137,8 +141,7 @@ export default function ProjectManager() {
     try {
       await clearRecordingData();
       await setActiveProject(projectId || null);
-      if (mode === 'new') sessionStorage.setItem(LAUNCH_MODE_KEY, 'new');
-      if (mode === 'exit') sessionStorage.setItem(LAUNCH_MODE_KEY, 'hub');
+      sessionStorage.setItem(LAUNCH_MODE_KEY, mode === 'exit' ? 'hub' : mode);
       window.location.reload();
     } catch (caught) {
       console.error(caught);
@@ -222,8 +225,8 @@ export default function ProjectManager() {
         <header>
           <div>
             <span className="project-hub-eyebrow">VIDEOS STUDIO</span>
-            <h2>Proyectos</h2>
-            <p>Abre un proyecto existente o empieza uno nuevo. Salir de un proyecto no elimina sus grabaciones ni su montaje.</p>
+            <h2>Proyectos · {contentMode === 'cinema' ? 'Cine' : 'Fútbol'}</h2>
+            <p>Abre un proyecto de esta sección o empieza uno nuevo. Salir de un proyecto no elimina sus grabaciones ni su montaje.</p>
           </div>
           <button className="project-hub-close" onClick={() => setHubOpen(false)} aria-label="Cerrar">×</button>
         </header>

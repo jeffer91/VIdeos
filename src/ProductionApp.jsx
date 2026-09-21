@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cutMedia } from './ffmpeg';
 import { AI_MASTER_PROMPT, parseSlides } from './parser';
+import { CINEMA_MASTER_PROMPT } from './cinemaPrompt';
 import {
   clearRecordingData,
   deleteSlideTake,
@@ -92,6 +93,7 @@ function normalizeProject(project) {
   const rawPlan = project.productionPlan || {};
   return {
     ...project,
+    contentMode: project.contentMode || 'football',
     slides: (project.slides || []).map((slide) => ({
       hook: '',
       reading: '',
@@ -161,7 +163,11 @@ function cleanedDurationSeconds(start, end, removedRanges) {
   return Math.max(0, end - start - removed);
 }
 
-export default function ProductionApp() {
+export default function ProductionApp({ contentMode = 'football', onChangeContentMode }) {
+  const isCinema = contentMode === 'cinema';
+  const activePrompt = isCinema ? CINEMA_MASTER_PROMPT : AI_MASTER_PROMPT;
+  const promptFilename = isCinema ? 'prompt-maestro-cine-videos-studio.txt' : 'prompt-maestro-11-records-videos-studio.txt';
+
   const [view, setView] = useState('content');
   const [project, setProject] = useState(null);
   const [takes, setTakes] = useState({});
@@ -419,7 +425,8 @@ export default function ProductionApp() {
     mountedRef.current = true;
     const initialise = async () => {
       try {
-        const active = normalizeProject(await getActiveProject());
+        const storedActive = normalizeProject(await getActiveProject());
+        const active = storedActive?.contentMode === contentMode ? storedActive : null;
         const meta = await getRecordingMeta();
         const chunks = meta ? await getChunks() : [];
         if (meta && chunks.length && meta.projectId && meta.slideNumber) setRecoveryMeta(meta);
@@ -450,7 +457,7 @@ export default function ProductionApp() {
       navigator.mediaDevices?.removeEventListener?.('devicechange', deviceChange);
       stopMediaStream();
     };
-  }, []);
+  }, [contentMode]);
 
   useEffect(() => {
     if (view !== 'recording' || !project || !currentSlide) {
@@ -495,17 +502,17 @@ export default function ProductionApp() {
     try {
       const nativeWriter = window.videosStudio?.clipboard?.writeText;
       if (typeof nativeWriter === 'function') {
-        const result = await nativeWriter(AI_MASTER_PROMPT);
-        if (!result?.ok || (result.verified === true && Number(result.length) !== AI_MASTER_PROMPT.length)) {
+        const result = await nativeWriter(activePrompt);
+        if (!result?.ok || (result.verified === true && Number(result.length) !== activePrompt.length)) {
           throw new Error('El portapapeles no confirmó la copia completa.');
         }
       } else if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(AI_MASTER_PROMPT);
+        await navigator.clipboard.writeText(activePrompt);
       } else {
         throw new Error('El portapapeles no está disponible.');
       }
       setError('');
-      setNotice('Prompt maestro copiado. Pégalo en tu IA, agrega el tema y trae aquí únicamente el guion generado.');
+      setNotice(isCinema ? 'Prompt de cine copiado. Pégalo en tu IA, indica la película y trae aquí únicamente el guion generado.' : 'Prompt maestro copiado. Pégalo en tu IA, agrega el tema y trae aquí únicamente el guion generado.');
     } catch (caught) {
       console.error(caught);
       setError('No se pudo copiar el prompt. Usa “Descargar prompt” como respaldo.');
@@ -590,6 +597,7 @@ export default function ProductionApp() {
       id: project?.id || `project-${Date.now()}`,
       name: result.slides[0]?.title || project?.name || 'Proyecto de video',
       rawText,
+      contentMode,
       slides: result.slides,
       productionPlan: plan,
       createdAt: project?.createdAt || Date.now(),
@@ -1137,19 +1145,19 @@ export default function ProductionApp() {
   return (
     <div className="production-app">
       <header className="production-header">
-        <div className="production-brand"><strong>Videos Studio</strong><span>Producción local por escenas</span></div>
+        <div className="production-brand"><strong>Videos Studio</strong><span>{isCinema ? 'Cine · análisis de películas' : 'Fútbol · 11 Records'}</span></div>
         <nav className="production-nav">
           {NAV_ITEMS.map(([key, label]) => (
             <button key={key} className={view === key ? 'active' : ''} onClick={() => navigate(key)} disabled={!project && key !== 'content' && key !== 'library'}>{label}</button>
           ))}
         </nav>
-        <div className="production-progress"><strong>{project ? `${acceptedCount}/${project.slides.length}` : 'Nuevo'}</strong><span>{project ? 'grabadas' : 'proyecto'}</span></div>
+        <div className="production-progress"><strong>{project ? `${acceptedCount}/${project.slides.length}` : 'Nuevo'}</strong><span>{project ? 'grabadas' : 'proyecto'}</span>{onChangeContentMode && <button className="mode-switch-button" onClick={onChangeContentMode} disabled={busyRecording}>Cambiar</button>}</div>
       </header>
 
       <main className="production-main">
         {view === 'content' && (
           <section className="flow-screen content-flow">
-            <div className="flow-heading"><div><span className="eyebrow">1 · CONTENIDO</span><h1>Cargar guion del video</h1><p>Copia el prompt maestro en tu IA y pega aquí únicamente la respuesta estructurada.</p></div><div className="heading-actions"><button className="secondary-button" onClick={copyAiPrompt}>Copiar prompt IA</button><button className="secondary-button" onClick={() => downloadText(AI_MASTER_PROMPT, 'prompt-maestro-11-records-videos-studio.txt')}>Descargar prompt</button></div></div>
+            <div className="flow-heading"><div><span className="eyebrow">1 · CONTENIDO · {isCinema ? 'CINE' : 'FÚTBOL'}</span><h1>{isCinema ? 'Cargar análisis de la película' : 'Cargar guion del video'}</h1><p>{isCinema ? 'Copia el prompt de cine en tu IA, indica la película y pega aquí únicamente el guion estructurado.' : 'Copia el prompt maestro en tu IA y pega aquí únicamente la respuesta estructurada.'}</p></div><div className="heading-actions"><button className="secondary-button" onClick={copyAiPrompt}>Copiar prompt IA</button><button className="secondary-button" onClick={() => downloadText(activePrompt, promptFilename)}>Descargar prompt</button></div></div>
             <div className="content-production-grid">
               <div className="production-card source-card">
                 <div className="card-title-row"><strong>Contenido fuente</strong><label className="file-button">Cargar TXT<input type="file" accept=".txt,text/plain" onChange={loadContentFile} /></label></div>
