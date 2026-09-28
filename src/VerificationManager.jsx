@@ -86,28 +86,6 @@ export default function VerificationManager() {
     setOpen(true);
   }
 
-  useEffect(() => {
-    const guardRecord = async (event) => {
-      const button = event.target?.closest?.('.recording-flow .record-button');
-      if (!button) return;
-      const active = await getActiveProject();
-      const number = currentSlideNumber();
-      const activeSlide = active?.slides?.find((item) => Number(item.number) === number);
-      if (verificationIsCurrent(activeSlide)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation?.();
-      setProject(active || null);
-      setSlideNumber(number);
-      setSources((activeSlide?.verification?.sources || []).join('\n'));
-      setNotes(activeSlide?.verification?.notes || '');
-      setError('Verifica los datos de esta diapositiva antes de grabarla.');
-      setOpen(true);
-    };
-    document.addEventListener('click', guardRecord, true);
-    return () => document.removeEventListener('click', guardRecord, true);
-  }, []);
-
   async function saveVerification(status) {
     if (!project?.id || !slide || busy) return;
     const cleanSources = sources.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);

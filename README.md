@@ -66,6 +66,12 @@ El corte se procesa con FFmpeg.wasm local. El original se mantiene y la app guar
 
 Requiere **Node.js 22.12.0 o superior**, porque Electron 44 exige esa versión mínima.
 
+### Instalador y actualizaciones en Windows
+
+Cada envío a `main` ejecuta **Build check** y deja un instalador de prueba en los artefactos de GitHub Actions. Para publicar una actualización, crea y envía una etiqueta con una versión superior, por ejemplo `v1.0.1`. El flujo **Windows Release** genera el instalador y los archivos de actualización y los publica en GitHub Releases. También puedes iniciar ese flujo manualmente e indicar la versión.
+
+Al ejecutar `Videos-Studio-Setup-<versión>.exe`, elige una carpeta en `D:` en la pantalla de instalación. La ruta se elige en tu PC; GitHub Actions no puede escribir directamente en tu disco D. Las versiones instaladas comprueban actualizaciones al arrancar y cada cuatro horas, descargan la nueva versión y muestran la opción para instalarla. Conserva el mismo directorio de instalación al actualizar.
+
 ```bash
 npm install
 npm start

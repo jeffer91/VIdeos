@@ -41,7 +41,7 @@ assert(recovery.includes('.recording-flow .record-button'), 'Debe bloquearse Gra
 assert(recovery.includes('clearRecordingData'), 'Debe existir descarte explícito de una recuperación.');
 assert(app.includes('<VerificationManager />'), 'La verificación factual debe estar integrada.');
 assert(verification.includes('verificationIsCurrent'), 'La verificación debe invalidarse si cambia la diapositiva.');
-assert(verification.includes('.recording-flow .record-button'), 'La grabación debe exigir verificación actual.');
+assert(!verification.includes('.recording-flow .record-button'), 'La verificación factual opcional no debe bloquear Grabar.');
 
 assert(storage.includes('getProjectTakeMetadata'), 'Debe existir lectura ligera de metadata de tomas.');
 assert(workflow.includes('getProjectTakeMetadata'), 'El progreso no debe cargar blobs completos periódicamente.');

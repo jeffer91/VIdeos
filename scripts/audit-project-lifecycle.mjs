@@ -22,7 +22,7 @@ assert(storage.includes('tx.objectStore(PROJECTS_STORE).getAll()'), 'El catálog
 assert(storage.includes('export async function setActiveProject(projectId)'), 'Debe poder activarse o desactivarse un proyecto sin borrarlo.');
 assert(storage.includes('tx.objectStore(META_STORE).delete(ACTIVE_PROJECT_KEY)'), 'Salir debe quitar solo el puntero al proyecto activo.');
 
-assert(app.includes('<ProjectManager />'), 'Los controles de proyecto deben estar montados permanentemente.');
+assert(app.includes('<ProjectManager contentMode={contentMode} />'), 'Los controles de proyecto deben estar montados en cada modo de contenido.');
 assert(main.includes("import './project-manager.css';"), 'Los estilos del gestor de proyectos deben cargarse al final.');
 
 assert(manager.includes('+ Nuevo proyecto'), 'Debe existir un botón permanente para crear un nuevo proyecto.');
@@ -30,8 +30,7 @@ assert(manager.includes('Salir del proyecto'), 'Debe existir un botón permanent
 assert(manager.includes('Proyectos'), 'Debe existir acceso permanente al catálogo de proyectos.');
 assert(manager.includes('listProjects()'), 'El gestor debe listar los proyectos existentes.');
 assert(manager.includes('setActiveProject(projectId || null)'), 'Cambiar de proyecto debe actualizar el proyecto activo.');
-assert(manager.includes("sessionStorage.setItem(LAUNCH_MODE_KEY, 'new')"), 'Nuevo proyecto debe abrir una sesión limpia sin borrar proyectos previos.');
-assert(manager.includes("sessionStorage.setItem(LAUNCH_MODE_KEY, 'hub')"), 'Salir debe volver al selector de proyectos.');
+assert(manager.includes("sessionStorage.setItem(LAUNCH_MODE_KEY, mode === 'exit' ? 'hub' : mode)"), 'Nuevo proyecto y salir deben activar el modo de inicio correspondiente.');
 assert(manager.includes('window.location.reload()'), 'El cambio de proyecto debe reiniciar el estado de React para evitar mezclar proyectos.');
 assert(manager.includes('clearRecordingData()'), 'El cambio explícito de proyecto debe limpiar fragmentos temporales de grabación.');
 assert(manager.includes('.status-recording, .status-paused, .status-saving, .status-detecting, .rec-indicator'), 'No se debe permitir cambiar de proyecto durante una grabación activa.');
