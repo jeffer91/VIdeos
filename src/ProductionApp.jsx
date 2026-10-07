@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import RecordingViewEnhancer, { FramingGuides } from './RecordingViewEnhancer';
+import { readPrompterPreference, waitForCountdown } from './recordingPreferences';
 import { cutMedia } from './ffmpeg';
 import { AI_MASTER_PROMPT, parseSlides } from './parser';
 import { CINEMA_MASTER_PROMPT } from './cinemaPrompt';
@@ -184,9 +186,16 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
   const [elapsedMs, setElapsedMs] = useState(0);
   const [micLevel, setMicLevel] = useState(0);
   const [recordingBlob, setRecordingBlob] = useState(null);
-  const [prompterFontSize, setPrompterFontSize] = useState(25);
-  const [prompterSpeed, setPrompterSpeed] = useState(34);
+  const [prompterFontSize, setPrompterFontSize] = useState(() => readPrompterPreference('font', 40, 28, 56));
+  const [prompterSpeed, setPrompterSpeed] = useState(() => readPrompterPreference('speed', 18, 5, 45));
   const [prompterRunning, setPrompterRunning] = useState(false);
+  const [countdown, setCountdown] = useState(3);
+  const [readingProgress, setReadingProgress] = useState(0);
+  const [recordingView, setRecordingView] = useState('camera');
+  const [guides, setGuides] = useState(true);
+  const countdownRef = useRef(null);
+  const prompterDelayRef = useRef(null);
+  const resumePrompterRef = useRef(false);
   const [retaking, setRetaking] = useState(false);
   const [recoveryMeta, setRecoveryMeta] = useState(null);
 
@@ -256,7 +265,8 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     [project],
   );
 
-  const busyRecording = ['detecting', 'recording', 'paused', 'saving'].includes(status);
+  const focusRecording = ['countdown', 'recording', 'paused'].includes(status);
+  const busyRecording = ['detecting', 'countdown', 'recording', 'paused', 'saving'].includes(status);
 
   function cleanupAudioMeter() {
     if (meterFrameRef.current) cancelAnimationFrame(meterFrameRef.current);
@@ -383,7 +393,42 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     }
   }
 
+  useEffect(() => {
+    try {
+      localStorage.setItem('videosstudio:prompter:font', String(prompterFontSize));
+      localStorage.setItem('videosstudio:prompter:speed', String(prompterSpeed));
+    } catch { /* Reading controls still work when storage is unavailable. */ }
+  }, [prompterFontSize, prompterSpeed]);
+
+  function clearPrompterDelay() {
+    clearTimeout(prompterDelayRef.current);
+    prompterDelayRef.current = null;
+  }
+
+  function togglePrompter() {
+    clearPrompterDelay();
+    setPrompterRunning((value) => !value);
+  }
+
+  function updateReadingProgress() {
+    const box = prompterRef.current;
+    if (!box) return;
+    const max = box.scrollHeight - box.clientHeight;
+    setReadingProgress(max > 0 ? Math.min(100, Math.round(box.scrollTop / max * 100)) : 0);
+  }
+
+  useEffect(() => {
+    const box = prompterRef.current;
+    if (!box) return undefined;
+    const observer = new ResizeObserver(updateReadingProgress);
+    observer.observe(box);
+    if (box.firstElementChild) observer.observe(box.firstElementChild);
+    return () => observer.disconnect();
+  }, [view, currentSlideIndex, prompterFontSize, focusRecording]);
+
   function resetPrompter() {
+    clearPrompterDelay();
+    setReadingProgress(0);
     setPrompterRunning(false);
     if (prompterRef.current) prompterRef.current.scrollTop = 0;
   }
@@ -392,12 +437,17 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     if (!prompterRunning) return undefined;
     let frame;
     let last = performance.now();
+    let fraction = 0;
     const move = (now) => {
       const box = prompterRef.current;
       if (!box) return;
       const delta = Math.min(80, now - last);
       last = now;
-      box.scrollTop += (prompterSpeed * delta) / 1000;
+      fraction += (prompterSpeed * delta) / 1000;
+      const pixels = Math.floor(fraction);
+      fraction -= pixels;
+      box.scrollTop += pixels;
+      updateReadingProgress();
       if (box.scrollTop + box.clientHeight >= box.scrollHeight - 2) setPrompterRunning(false);
       else frame = requestAnimationFrame(move);
     };
@@ -454,6 +504,8 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     navigator.mediaDevices?.addEventListener?.('devicechange', deviceChange);
     return () => {
       mountedRef.current = false;
+      countdownRef.current?.abort();
+      clearPrompterDelay();
       navigator.mediaDevices?.removeEventListener?.('devicechange', deviceChange);
       stopMediaStream();
     };
@@ -465,6 +517,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
       return;
     }
     setRetaking(false);
+    setRecordingView('camera');
     resetPrompter();
     const take = takes[currentSlide.number];
     if (take?.blob) {
@@ -616,7 +669,14 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     setError('');
   }
 
+  function cancelCountdown() {
+    countdownRef.current?.abort();
+    setStatus('ready');
+    resetPrompter();
+  }
+
   async function startRecording() {
+    if (countdownRef.current || status !== 'ready') return;
     if (!project || !currentSlide?.reading?.trim()) {
       setError(`La diapositiva ${currentSlide?.number || ''} no tiene LECTURA.`);
       return;
@@ -625,9 +685,22 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     if (!stream) stream = await openStream();
     if (!stream) return;
 
+    const controller = new AbortController();
+    countdownRef.current = controller;
+    setError('');
+    setNotice('');
+    setStatus('countdown');
+    setCountdown(3);
+    resetPrompter();
     try {
+      for (const number of [3, 2, 1]) {
+        setCountdown(number);
+        if (!await waitForCountdown(controller.signal)) return;
+      }
       await navigator.storage?.persist?.();
+      if (controller.signal.aborted) return;
       await clearRecordingData();
+      if (controller.signal.aborted) return;
       pendingWritesRef.current = [];
       chunkIndexRef.current = 0;
       setRecordingBlob(null);
@@ -692,25 +765,36 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
         }
       };
 
-      recordingStartedAtRef.current = Date.now();
+      recordingStartedAtRef.current = 0;
       pausedStartedAtRef.current = 0;
       pausedTotalRef.current = 0;
       elapsedRef.current = 0;
       setElapsedMs(0);
       resetPrompter();
-      setPrompterRunning(true);
       await setRecordingMeta({ sessionId, projectId, slideNumber, mode, mimeType: recorder.mimeType || mimeType, createdAt: Date.now() });
+      if (controller.signal.aborted) return;
       recorder.start(1000);
+      recordingStartedAtRef.current = Date.now();
       setStatus('recording');
+      prompterDelayRef.current = setTimeout(() => {
+        prompterDelayRef.current = null;
+        if (mountedRef.current && recorder.state === 'recording') setPrompterRunning(true);
+      }, 1000);
     } catch (caught) {
       console.error(caught);
       setError('No se pudo iniciar la grabación.');
+      setStatus(streamRef.current ? 'ready' : 'idle');
+      recorderRef.current = null;
+    } finally {
+      if (countdownRef.current === controller) countdownRef.current = null;
     }
   }
 
   function pauseRecording() {
     const recorder = recorderRef.current;
     if (recorder?.state !== 'recording') return;
+    resumePrompterRef.current = prompterRunning || prompterDelayRef.current !== null;
+    clearPrompterDelay();
     recorder.pause();
     pausedStartedAtRef.current = Date.now();
     setPrompterRunning(false);
@@ -723,7 +807,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     recorder.resume();
     pausedTotalRef.current += Date.now() - pausedStartedAtRef.current;
     pausedStartedAtRef.current = 0;
-    setPrompterRunning(true);
+    setPrompterRunning(resumePrompterRef.current);
     setStatus('recording');
   }
 
@@ -731,6 +815,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     const recorder = recorderRef.current;
     if (!recorder || recorder.state === 'inactive') return;
     updateElapsed();
+    clearPrompterDelay();
     setPrompterRunning(false);
     recorder.stop();
     setStatus('saving');
@@ -958,7 +1043,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
 
   function navigationBlockReason(nextView) {
     if (nextView === view) return '';
-    if (['recording', 'paused', 'saving'].includes(status)) {
+    if (['countdown', 'recording', 'paused', 'saving'].includes(status)) {
       return 'Finaliza la grabación antes de cambiar de pantalla.';
     }
     if (status === 'detecting') {
@@ -1066,6 +1151,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
 
   const statusLabel = {
     detecting: 'Detectando',
+    countdown: `Comienza en ${countdown}`,
     idle: 'Sin dispositivo',
     ready: 'Listo',
     recording: 'Grabando',
@@ -1143,7 +1229,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     && missingAssetCount === 0;
 
   return (
-    <div className="production-app">
+    <div className="production-app" data-recording-focus={focusRecording ? "true" : "false"}>
       <header className="production-header">
         <div className="production-brand"><strong>Videos Studio</strong><span>{isCinema ? 'Cine · análisis de películas' : 'Fútbol · 11 Records'}</span></div>
         <nav className="production-nav">
@@ -1179,17 +1265,24 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
         )}
 
         {view === 'recording' && project && currentSlide && (
-          <section className="flow-screen recording-flow">
-            <div className="slide-flow-header"><button onClick={() => setCurrentSlideIndex((value) => Math.max(0, value - 1))} disabled={busyRecording || currentSlideIndex === 0}>←</button><div><span>DIAPOSITIVA {currentSlide.number} DE {project.slides.length}</span><h1>{currentSlide.title}</h1></div><button onClick={() => setCurrentSlideIndex((value) => Math.min(project.slides.length - 1, value + 1))} disabled={busyRecording || currentSlideIndex === project.slides.length - 1}>→</button></div>
+          <section className="flow-screen recording-flow" data-status={status} data-recording-view={focusRecording ? "prompter" : recordingView} data-framing-guides={guides ? "on" : "off"}>
+            <div className="slide-flow-header"><button onClick={() => setCurrentSlideIndex((value) => Math.max(0, value - 1))} disabled={busyRecording || currentSlideIndex === 0}>←</button><div><span>DIAPOSITIVA {currentSlide.number} DE {project.slides.length}</span><h1>{currentSlide.title}</h1><span className={`recording-header-status state-${status}`}>{statusLabel}</span></div><button onClick={() => setCurrentSlideIndex((value) => Math.min(project.slides.length - 1, value + 1))} disabled={busyRecording || currentSlideIndex === project.slides.length - 1}>→</button></div>
             <div className="slide-mini-rail">{currentSlideWindow.map((slide) => { const index = project.slides.findIndex((item) => item.number === slide.number); const take = takes[slide.number]; return <button key={slide.number} className={index === currentSlideIndex ? 'current' : ''} onClick={() => setCurrentSlideIndex(index)} disabled={busyRecording}><span>{slide.number}</span><small>{take?.accepted ? '✓' : take?.blob ? '◐' : '○'}</small></button>; })}</div>
             <div className="recording-production-grid">
+              {!busyRecording && status !== 'stopped' && <RecordingViewEnhancer viewMode={recordingView} guides={guides} running={prompterRunning} onCamera={() => { setRecordingView('camera'); resetPrompter(); }} onPractice={() => { setRecordingView('prompter'); togglePrompter(); }} onGuides={() => setGuides((value) => !value)} />}
               <div className="production-card camera-production-card">
                 <div className="recording-topline"><div className="mode-switch"><button className={mode === 'video' ? 'active' : ''} onClick={() => { setMode('video'); openStream({ mode: 'video' }); }} disabled={busyRecording || (!!currentTake?.blob && !retaking)}>Video + audio</button><button className={mode === 'audio' ? 'active' : ''} onClick={() => { setMode('audio'); openStream({ mode: 'audio' }); }} disabled={busyRecording || (!!currentTake?.blob && !retaking)}>Solo audio</button></div><div className="device-selects">{mode === 'video' && <select value={cameraId} onChange={(event) => { setCameraId(event.target.value); openStream({ cameraId: event.target.value }); }} disabled={busyRecording || status === 'stopped'}><option value="">Cámara predeterminada</option>{devices.cameras.map((device, index) => <option key={device.deviceId || index} value={device.deviceId}>{device.label || `Cámara ${index + 1}`}</option>)}</select>}<select value={microphoneId} onChange={(event) => { setMicrophoneId(event.target.value); openStream({ microphoneId: event.target.value }); }} disabled={busyRecording || status === 'stopped'}><option value="">Micrófono predeterminado</option>{devices.microphones.map((device, index) => <option key={device.deviceId || index} value={device.deviceId}>{device.label || `Micrófono ${index + 1}`}</option>)}</select></div><span className={`status-pill status-${status}`}><i className="status-dot" />{statusLabel}</span></div>
-                <div className="production-stage">{mode === 'video' ? (recordingUrl && status === 'stopped' ? <video src={recordingUrl} controls playsInline /> : <video ref={liveVideoRef} className="live-video" muted autoPlay playsInline />) : <div className="audio-stage">{recordingUrl && status === 'stopped' ? <audio src={recordingUrl} controls /> : 'Micrófono preparado'}</div>}{(status === 'recording' || status === 'paused') && <div className="rec-indicator">{status === 'paused' ? 'PAUSA' : 'REC'}</div>}</div>
-                <div className="recording-bottom"><div className="mic-meter"><span>MIC</span><div><i style={{ width: `${Math.max(streamRef.current ? 2 : 0, micLevel)}%` }} /></div><strong>{micLevel}%</strong></div><div className="record-clock">{formatTime(elapsedMs)}</div><div className="record-actions">{status === 'ready' && <button className="record-button" onClick={startRecording} disabled={!currentSlide.reading?.trim()}>Grabar</button>}{status === 'detecting' && <button className="secondary-button" disabled>Detectando…</button>}{status === 'idle' && <button className="secondary-button" onClick={() => openStream()}>Reintentar</button>}{status === 'recording' && <><button className="secondary-button" onClick={pauseRecording}>Pausar</button><button className="danger-button" onClick={stopRecording}>Finalizar</button></>}{status === 'paused' && <><button className="primary-button small" onClick={resumeRecording}>Continuar</button><button className="danger-button" onClick={stopRecording}>Finalizar</button></>}{status === 'saving' && <button className="secondary-button" disabled>Guardando…</button>}{status === 'stopped' && <><button className="secondary-button" onClick={repeatTake}>{currentTake?.accepted ? 'Regrabar' : 'Repetir'}</button>{!currentTake?.accepted && <button className="accept-button" onClick={acceptTake}>Aceptar</button>}</>}</div></div>
+                <div className="production-stage">{guides && recordingView === 'camera' && !busyRecording && status !== 'stopped' && <FramingGuides />}{status === 'countdown' && <div className="recording-countdown" role="status"><strong>{countdown}</strong><span>Prepárate · aún no se está grabando</span></div>}{mode === 'video' ? (recordingUrl && status === 'stopped' ? <video src={recordingUrl} controls playsInline /> : <video ref={liveVideoRef} className="live-video" muted autoPlay playsInline />) : <div className="audio-stage">{recordingUrl && status === 'stopped' ? <audio src={recordingUrl} controls /> : 'Micrófono preparado'}</div>}{(status === 'recording' || status === 'paused') && <div className="rec-indicator">{status === 'paused' ? 'PAUSA' : 'REC'}</div>}</div>
+                <div className="recording-bottom"><div className="mic-meter"><span>MIC</span><div><i style={{ width: `${Math.max(streamRef.current ? 2 : 0, micLevel)}%` }} /></div><strong>{micLevel}%</strong></div><div className="record-clock">{formatTime(elapsedMs)}</div><div className="record-actions">{status === 'ready' && <button className="record-button" onClick={startRecording} disabled={!currentSlide.reading?.trim()}>Grabar</button>}{status === 'countdown' && <button className="secondary-button" onClick={cancelCountdown}>Cancelar</button>}{status === 'detecting' && <button className="secondary-button" disabled>Detectando…</button>}{status === 'idle' && <button className="secondary-button" onClick={() => openStream()}>Reintentar</button>}{status === 'recording' && <><button className="secondary-button" onClick={pauseRecording}>Pausar</button><button className="danger-button" onClick={stopRecording}>Finalizar</button></>}{status === 'paused' && <><button className="primary-button small" onClick={resumeRecording}>Continuar</button><button className="danger-button" onClick={stopRecording}>Finalizar</button></>}{status === 'saving' && <button className="secondary-button" disabled>Guardando…</button>}{status === 'stopped' && <><button className="secondary-button" onClick={repeatTake}>{currentTake?.accepted ? 'Regrabar' : 'Repetir'}</button>{!currentTake?.accepted && <button className="accept-button" onClick={acceptTake}>Aceptar</button>}</>}</div></div>
                 <div className="capture-meta"><span>{resolution ? `${resolution.width}×${resolution.height}` : '—'}</span><span>{resolution?.frameRate ? `${Math.round(resolution.frameRate)} fps` : '—'}</span><span>{recordingBlob ? formatBytes(recordingBlob.size) : 'Sin toma'}</span></div>
               </div>
-              <aside className="production-card prompter-production-card"><div className="prompter-toolbar"><div><span className="eyebrow">PROMPTER</span><strong>LECTURA</strong></div><div><button onClick={() => setPrompterFontSize((value) => Math.max(16, value - 2))}>A−</button><button onClick={() => setPrompterFontSize((value) => Math.min(44, value + 2))}>A+</button></div></div><div className="speed-control"><span>Velocidad</span><input type="range" min="10" max="90" value={prompterSpeed} onChange={(event) => setPrompterSpeed(Number(event.target.value))} /><strong>{prompterSpeed}</strong></div><div className="prompter-reading" ref={prompterRef} style={{ fontSize: `${prompterFontSize}px` }}>{currentSlide.reading?.trim() ? <pre>{currentSlide.reading}</pre> : <div className="missing-reading"><strong>Falta LECTURA</strong><span>Agrégala desde Contenido.</span></div>}</div><div className="prompter-actions"><button className="secondary-button" onClick={resetPrompter}>↥ Inicio</button><button className="primary-button small" onClick={() => setPrompterRunning((value) => !value)} disabled={!currentSlide.reading?.trim()}>{prompterRunning ? 'Pausar' : '▶ Iniciar'}</button></div></aside>
+              <aside className="production-card prompter-production-card">
+                <div className="prompter-toolbar"><div><span className="eyebrow">PROMPTER</span><strong>LECTURA · {readingProgress}%</strong></div><div><button aria-label="Reducir letra" onClick={() => setPrompterFontSize((value) => Math.max(28, value - 2))}>A−</button><span>{prompterFontSize} px</span><button aria-label="Ampliar letra" onClick={() => setPrompterFontSize((value) => Math.min(56, value + 2))}>A+</button></div></div>
+                <label className="speed-control"><span>Velocidad</span><input aria-label="Velocidad del texto" type="range" min="5" max="45" value={prompterSpeed} onChange={(event) => setPrompterSpeed(Number(event.target.value))} /><strong>{prompterSpeed} px/s</strong></label>
+                <div className="prompter-reading" ref={prompterRef} onScroll={updateReadingProgress} style={{ fontSize: `${prompterFontSize}px` }}>{currentSlide.reading?.trim() ? <pre>{currentSlide.reading}</pre> : <div className="missing-reading"><strong>Falta LECTURA</strong><span>Agrégala desde Contenido.</span></div>}</div>
+                <div className="prompter-actions"><button className="secondary-button" onClick={resetPrompter}>↥ Inicio</button><button className="primary-button small" onClick={togglePrompter} disabled={!currentSlide.reading?.trim() || ['countdown', 'paused', 'saving'].includes(status)}>{prompterRunning ? 'Pausar texto' : '▶ Iniciar texto'}</button></div>
+                <progress className="reading-progress" aria-label="Avance de lectura" value={readingProgress} max="100" />
+              </aside>
             </div>
             {recoveryMeta && <div className="recovery-banner"><span>Se encontró una toma interrumpida de la diapositiva {recoveryMeta.slideNumber}.</span><button onClick={recoverInterruptedRecording}>Recuperar toma</button></div>}
           </section>

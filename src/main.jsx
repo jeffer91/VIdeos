@@ -13,3 +13,6 @@ import './project-manager.css';
 import './prompter-focus.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+import './recording-layout.css';
+import './recording-focus.css';

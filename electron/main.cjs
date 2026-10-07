@@ -543,6 +543,10 @@ app.whenReady().then(async () => {
   app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) await createWindow();
   });
+}).catch((error) => {
+  console.error('No se pudo iniciar Videos Studio:', error);
+  dialog.showErrorBox('Videos Studio no pudo iniciar', `No se pudo preparar la aplicación.\n\n${error?.message || error}\n\nEn desarrollo, ejecuta npm ci --include=optional y npm start.`);
+  app.quit();
 });
 
 app.on('window-all-closed', () => {

@@ -18,7 +18,7 @@ import './slide-editor.css';
 
 function isRecordingBusy() {
   return Boolean(document.querySelector(
-    '.status-recording, .status-paused, .status-saving, .status-detecting, .rec-indicator',
+    '.status-countdown, .status-recording, .status-paused, .status-saving, .status-detecting, .rec-indicator',
   ));
 }
 
