@@ -50,5 +50,7 @@ assert.match(identity, /\.production-app \.production-header/, 'New header theme
 assert.match(identity, /\.recording-frame-tools/, 'Recording scale tools must have visible styling.');
 assert.match(app, /setRecordFit\('contain'\)/, 'The original video aspect ratio must be restorable.');
 assert.match(app, /setShowCutResult\(true\)/, 'The saved output must be previewable.');
-console.log('Mejoras de audio, video escalable, resultado y tema visual: OK');
+assert.match(db, /export async function saveCleanedTake/, 'Processed cuts should atomically invalidate stale montages.');
+assert.match(app, /await saveCleanedTake\(project.id, cutSlide.number, nextTake\)/, 'Save must use atomic cut commit.');
+console.log('Mejoras de audio, video escalable, resultado, persistencia segura y tema visual: OK');
 console.log('Auditoría de Corte, regrabación, recuperación y respaldos: OK');

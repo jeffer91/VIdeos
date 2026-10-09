@@ -21,6 +21,7 @@ import {
   saveChunk,
   saveProject,
   saveSlideTake,
+  saveCleanedTake,
   setRecordingMeta,
 } from './storage';
 
@@ -1110,7 +1111,8 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
         cleanedAt: Date.now(),
         cleanedDurationMs: Math.round(outputDuration * 1000),
       };
-      await saveSlideTake(project.id, cutSlide.number, nextTake);
+      const updatedProject = await saveCleanedTake(project.id, cutSlide.number, nextTake);
+      setProject(normalizeProject(updatedProject));
       const nextMap = { ...takes, [cutSlide.number]: nextTake };
       setTakes(nextMap);
       setNotice(`Diapositiva ${cutSlide.number} limpia y guardada.`);

@@ -268,6 +268,40 @@ export async function setActiveProject(projectId) {
   await transactionDone(tx);
 }
 
+// A clean take must invalidate any previously reviewed montage scene at the
+// same time the new processed Blob becomes visible (single IDB transaction).
+export async function saveCleanedTake(projectId, slideNumber, take) {
+  if (!(take?.blob instanceof Blob) || !(take?.cleanedBlob instanceof Blob) || !take.cleanedBlob.size) {
+    throw new Error('No se guardó el corte: falta la grabación original o el resultado procesado.');
+  }
+  const db = await openDb();
+  const tx = db.transaction([PROJECTS_STORE, TAKES_STORE], 'readwrite');
+  const done = transactionDone(tx);
+  const projectStore = tx.objectStore(PROJECTS_STORE);
+  const project = await requestValue(projectStore.get(projectId));
+  if (!project) {
+    tx.abort();
+    await done.catch(() => {});
+    throw new Error('El proyecto ya no existe. No se reemplazó ningún corte.');
+  }
+  const plan = project.productionPlan || {};
+  const scenes = { ...(plan.scenes || {}) };
+  if (scenes[slideNumber]) {
+    scenes[slideNumber] = { ...scenes[slideNumber], ready: false, invalidatedAt: Date.now(), invalidatedBy: 'new-cleaned-take' };
+  }
+  const updated = { ...project, productionPlan: { ...plan, scenes }, updatedAt: Date.now() };
+  tx.objectStore(TAKES_STORE).put({
+    ...take,
+    key: takeKey(projectId, slideNumber),
+    projectId,
+    slideNumber,
+    updatedAt: Date.now(),
+  });
+  projectStore.put(updated);
+  await done;
+  return updated;
+}
+
 export async function saveSlideTake(projectId, slideNumber, take) {
   const db = await openDb();
   const tx = db.transaction(TAKES_STORE, 'readwrite');
