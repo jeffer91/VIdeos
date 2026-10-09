@@ -1,0 +1,173 @@
+/* Videos Studio: a more energetic but professional light interface. */
+:root {
+  --vs-bg: #f1f4fc;
+  --vs-surface: #ffffff;
+  --vs-surface-soft: #f6f7ff;
+  --vs-border: #d8e1f3;
+  --vs-border-strong: #b8c8e2;
+  --vs-text: #172b4d;
+  --vs-text-soft: #3d5578;
+  --vs-muted: #677f9a;
+  --vs-primary: #4257db;
+  --vs-primary-hover: #3546c8;
+  --vs-primary-soft: #eeedff;
+  --vs-accent: #00a9a0;
+  --vs-accent-soft: #e6f8f6;
+  --vs-success: #008d75;
+  --vs-success-soft: #e6f8f1;
+  --vs-warning: #d48b19;
+  --vs-warning-soft: #fff6e0;
+}
+.production-app, .production-main { background: #f1f4fc !important; }
+.production-main {
+  background-image: radial-gradient(circle at 12% 2%, rgba(120,85,221,.1), transparent 33%),
+                    radial-gradient(circle at 85% 95%, rgba(0,169,160,.065), transparent 34%) !important;
+}
+.production-header {
+  border-bottom-color: #d9dff3 !important;
+  background: linear-gradient(105deg,#fff 0%,#f7f5ff 64%,#effbfa 100%) !important;
+  box-shadow: 0 3px 18px rgba(37,55,120,.07) !important;
+}
+.production-header::after {
+  background: linear-gradient(90deg,#4257db,#7855dd 55%,#00a9a0) !important;
+}
+.production-nav button.active {
+  border-color: #b6b6f2 !important;
+  color: #3446b5 !important;
+  background: linear-gradient(135deg,#efedff,#eafbfa) !important;
+}
+.production-nav button.active::before { background: #7158dd !important; }
+.production-card, .project-command-bar, .project-list-card {
+  border-color: #dbe2f1 !important;
+  box-shadow: 0 2px 14px rgba(30,54,117,.055) !important;
+}
+.production-app .primary-button,
+.production-app .cut-enhancer-footer .primary-button {
+  color: #fff !important;
+  border-color: #5758d6 !important;
+  background: linear-gradient(115deg,#4257db,#7855dd) !important;
+  box-shadow: 0 3px 13px rgba(78,75,210,.18) !important;
+}
+.production-app .primary-button:hover:not(:disabled) {
+  background: linear-gradient(115deg,#3447bc,#6842c9) !important;
+}
+.cut-flow .cut-list button.active {
+  background: linear-gradient(90deg,#eaeaff,#effaf9) !important;
+  box-shadow: inset 3px 0 0 #7855dd !important;
+}
+/* The video no longer consumes the entire editor height. */
+.cut-flow .cut-editor:not([data-editor-mode='basic']) {
+  grid-template-rows: clamp(210px,32vh,295px) minmax(0,1fr) !important;
+  gap: 7px !important;
+}
+.cut-flow .cut-preview-layout {
+  order: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0,1.65fr) minmax(255px,.85fr);
+  gap: 10px;
+  align-items: stretch;
+}
+.cut-flow .cut-preview-layout > .cut-video {
+  min-height: 0 !important;
+  max-height: 100% !important;
+  height: 100% !important;
+  border: 1px solid #213958 !important;
+  border-radius: 11px !important;
+  background: #121d32 !important;
+}
+.cut-flow .cut-preview-layout > .cut-video video {
+  object-fit: contain !important;
+}
+/* New optional audio processing panel. */
+.cut-flow .cut-audio-panel {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid #d5dafa;
+  border-radius: 11px;
+  background: linear-gradient(160deg,#f5f2ff,#fff 65%,#f0fbfa);
+  scrollbar-width: thin;
+}
+.cut-audio-heading { display:flex; align-items:center; gap:8px; }
+.cut-audio-icon {
+  display:grid; place-items:center;
+  width:27px; height:27px; flex:0 0 auto;
+  border-radius:8px; background:linear-gradient(130deg,#7855dd,#4257db);
+  color:#fff; font-size:17px;
+}
+.cut-audio-heading > div { display:grid; gap:2px; }
+.cut-audio-heading strong { color:#343d98; font-size:11px; letter-spacing:.04em; }
+.cut-audio-heading small, .cut-audio-toggle small { color:#617792; font-size:9px; }
+.cut-audio-toggle {
+  display:flex; align-items:center; justify-content:space-between;
+  position:relative; gap:10px;
+  padding:8px 9px;
+  border:1px solid #e2e5f5; border-radius:9px;
+  background:#fff;
+  cursor:pointer;
+}
+.cut-audio-toggle > span { display:grid; gap:2px; }
+.cut-audio-toggle strong { color:#22385d; font-size:11px; }
+.cut-audio-toggle input {
+  position:absolute; right:10px; width:38px; height:22px;
+  opacity:.001; cursor:pointer;
+}
+.cut-audio-toggle i {
+  width:38px; height:22px; flex:0 0 auto; display:block;
+  border-radius:18px; background:#c8d3e7;
+  transition:background .15s ease;
+  pointer-events:none;
+}
+.cut-audio-toggle i::after {
+  content:''; display:block; width:16px; height:16px;
+  margin:3px; border-radius:50%;
+  background:#fff; box-shadow:0 1px 3px rgba(30,49,101,.2);
+  transition:transform .15s ease;
+}
+.cut-audio-toggle input:checked + i { background:#00a9a0; }
+.cut-audio-toggle:nth-of-type(2) input:checked + i { background:#7855dd; }
+.cut-audio-toggle input:checked + i::after { transform:translateX(16px); }
+.cut-audio-toggle:has(input:focus-visible) { outline:2px solid #4257db; outline-offset:2px; }
+.cut-audio-toggle:has(input:disabled) { opacity:.62; cursor:not-allowed; }
+.cut-audio-compare { display:grid; gap:5px; }
+.cut-audio-preview-button {
+  min-height:27px; padding:5px 8px;
+  border:1px solid #8bd9d1; border-radius:8px;
+  color:#087a78; background:#e9f8f6;
+  font-size:10px; font-weight:750; cursor:pointer;
+}
+.cut-audio-preview-button:disabled { opacity:.55; cursor:not-allowed; }
+.cut-audio-choice { display:grid; grid-template-columns:1fr 1fr; gap:4px; }
+.cut-audio-choice button {
+  border:1px solid #d7dcf0; border-radius:6px; padding:4px;
+  color:#405879; background:#fff; cursor:pointer; font-size:9px;
+}
+.cut-audio-choice button.active { color:#fff; border-color:#6454cc; background:#6454cc; }
+.cut-audio-compare audio { width:100%; height:32px; }
+.cut-audio-error { color:#b52343; font-size:9px; }
+.cut-audio-footnote { color:#687d96; font-size:9px; line-height:1.35; }
+/* The expanded waveform and tools use the reclaimed space. */
+.cut-flow .cut-studio-enhancer {
+  order:1;
+  min-height:0;
+  overflow-y:auto;
+}
+.cut-flow .cut-editor[data-editor-mode='basic'],
+.cut-flow .cut-editor:not(:has(> .cut-studio-enhancer)) {
+  grid-template-rows: clamp(205px,31vh,285px) repeat(4,auto) !important;
+  overflow-y:auto !important;
+}
+@media(max-width:1150px) {
+  .cut-flow .cut-preview-layout { grid-template-columns:minmax(0,1fr) minmax(210px,.8fr); gap:6px; }
+  .cut-flow .cut-audio-panel { padding:7px; gap:5px; }
+}
+@media(max-height:720px) {
+  .cut-flow .cut-editor:not([data-editor-mode='basic']) { grid-template-rows:205px minmax(0,1fr) !important; }
+  .cut-flow .cut-audio-panel { padding:6px; gap:4px; }
+}

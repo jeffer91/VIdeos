@@ -15,7 +15,7 @@ const LAUNCH_MODE_KEY = 'videosstudio:project-launch-mode';
 
 function isRecordingBusy() {
   return Boolean(document.querySelector(
-    '.status-countdown, .status-recording, .status-paused, .status-saving, .status-detecting, .rec-indicator, .production-app[data-accepting-take="true"]',
+    '.status-countdown, .status-recording, .status-paused, .status-saving, .status-detecting, .rec-indicator, .production-app[data-accepting-take="true"], .production-app[data-processing-audio="true"]',
   ));
 }
 
