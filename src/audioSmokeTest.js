@@ -29,6 +29,57 @@ function syntheticWav() {
   return new Blob([bytes], { type: 'audio/wav' });
 }
 
+async function syntheticWebM() {
+  if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) {
+    throw new Error('Chromium no ofrece MediaRecorder/captureStream para validar video.');
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = 320;
+  canvas.height = 180;
+  const context = canvas.getContext('2d');
+  const paint = (n) => {
+    context.fillStyle = '#1b326b';
+    context.fillRect(0, 0, 320, 180);
+    context.fillStyle = '#61cabb';
+    context.fillRect(20 + (n % 150), 65, 55, 45);
+  };
+  paint(0);
+  const camera = canvas.captureStream(8);
+  const audio = new (window.AudioContext || window.webkitAudioContext)();
+  const oscillator = audio.createOscillator();
+  oscillator.frequency.value = 250;
+  const destination = audio.createMediaStreamDestination();
+  oscillator.connect(destination);
+  oscillator.start();
+  void audio.resume().catch(() => {});
+  const stream = new MediaStream([...camera.getVideoTracks(), ...destination.stream.getAudioTracks()]);
+  const mime = ['video/webm;codecs=vp8,opus', 'video/webm'].find((type) => MediaRecorder.isTypeSupported(type));
+  if (!mime) throw new Error('El Chromium de pruebas no soporta WebM.');
+  const chunks = [];
+  const recorder = new MediaRecorder(stream, { mimeType: mime });
+  const finished = new Promise((resolve, reject) => {
+    recorder.ondataavailable = (event) => { if (event.data?.size) chunks.push(event.data); };
+    recorder.onstop = resolve;
+    recorder.onerror = (event) => reject(new Error(event.error?.message || 'No se pudo grabar la muestra sintética.'));
+  });
+  const ticker = setInterval(() => paint(Date.now() % 150), 125);
+  try {
+    recorder.start(100);
+    await new Promise((resolve) => setTimeout(resolve, 1300));
+    recorder.stop();
+    await finished;
+    const blob = new Blob(chunks, { type: mime });
+    if (blob.size < 1000) throw new Error('La muestra WebM se generó vacía.');
+    return blob;
+  } finally {
+    clearInterval(ticker);
+    if (recorder.state !== 'inactive') recorder.stop();
+    oscillator.stop();
+    stream.getTracks().forEach((track) => track.stop());
+    await audio.close();
+  }
+}
+
 export async function runAudioSmokeTest() {
   const source = syntheticWav();
   const combined = { noiseReduction: true, voiceEnhancement: true };
@@ -41,6 +92,12 @@ export async function runAudioSmokeTest() {
     voiceEnhancement: false,
   });
   if (!cut || cut.size < 500) throw new Error('FFmpeg no produjo el corte con reducción de ruido.');
+  const originalVideo = await syntheticWebM();
+  const enhancedVideo = await enhanceMediaAudio(originalVideo, 'video', { voiceEnhancement: true });
+  if (enhancedVideo.size < 1500 || enhancedVideo.type !== 'video/mp4') {
+    throw new Error('La mejora de voz no generó un video MP4 válido.');
+  }
   return { improved: improved.size, originalSample: sample.original.size,
-    enhancedSample: sample.improved.size, cut: cut.size };
+    enhancedSample: sample.improved.size, cut: cut.size,
+    sourceVideo: originalVideo.size, improvedVideo: enhancedVideo.size };
 }
