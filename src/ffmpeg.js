@@ -1,5 +1,6 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
+import { audioFilterChain, hasAudioEffects } from './audioEffects';
 
 let ffmpegInstance = null;
 let loadingPromise = null;
@@ -84,7 +85,8 @@ function keepRanges(start, end, removedRanges) {
   return keep;
 }
 
-async function runSingleRange(ffmpeg, inputName, outputName, mode, range) {
+async function runSingleRange(ffmpeg, inputName, outputName, mode, range, audioEffects = {}) {
+  const audioChain = audioFilterChain(audioEffects);
   const duration = range.end - range.start;
   const args = mode === 'video'
     ? [
@@ -95,6 +97,7 @@ async function runSingleRange(ffmpeg, inputName, outputName, mode, range) {
         '-preset', 'veryfast',
         '-crf', '21',
         '-pix_fmt', 'yuv420p',
+        ...(audioChain ? ['-af', audioChain] : []),
         '-c:a', 'aac',
         '-b:a', '128k',
         '-movflags', '+faststart',
@@ -105,6 +108,7 @@ async function runSingleRange(ffmpeg, inputName, outputName, mode, range) {
         '-i', inputName,
         '-t', String(duration),
         '-vn',
+        ...(audioChain ? ['-af', audioChain] : []),
         '-c:a', 'aac',
         '-b:a', '128k',
         outputName,
@@ -112,13 +116,17 @@ async function runSingleRange(ffmpeg, inputName, outputName, mode, range) {
   return ffmpeg.exec(args);
 }
 
-async function runMultipleRanges(ffmpeg, inputName, outputName, mode, ranges) {
+async function runMultipleRanges(ffmpeg, inputName, outputName, mode, ranges, audioEffects = {}) {
+  const audioChain = audioFilterChain(audioEffects);
   if (mode === 'audio') {
     const trims = ranges.map(
       (range, index) => `[0:a]atrim=start=${range.start}:end=${range.end},asetpts=PTS-STARTPTS[a${index}]`,
     );
     const inputs = ranges.map((_range, index) => `[a${index}]`).join('');
-    const filter = `${trims.join(';')};${inputs}concat=n=${ranges.length}:v=0:a=1[aout]`;
+    const joined = `${inputs}concat=n=${ranges.length}:v=0:a=1`;
+    const filter = audioChain
+      ? `${trims.join(';')};${joined}[joined];[joined]${audioChain}[aout]`
+      : `${trims.join(';')};${joined}[aout]`;
     return ffmpeg.exec([
       '-i', inputName,
       '-filter_complex', filter,
@@ -136,7 +144,10 @@ async function runMultipleRanges(ffmpeg, inputName, outputName, mode, ranges) {
     trims.push(`[0:a]atrim=start=${range.start}:end=${range.end},asetpts=PTS-STARTPTS[a${index}]`);
     inputs.push(`[v${index}][a${index}]`);
   });
-  const filter = `${trims.join(';')};${inputs.join('')}concat=n=${ranges.length}:v=1:a=1[vout][aout]`;
+  const joined = `${inputs.join('')}concat=n=${ranges.length}:v=1:a=1`;
+  const filter = audioChain
+    ? `${trims.join(';')};${joined}[vout][joinedAudio];[joinedAudio]${audioChain}[aout]`
+    : `${trims.join(';')};${joined}[vout][aout]`;
   return ffmpeg.exec([
     '-i', inputName,
     '-filter_complex', filter,
@@ -199,7 +210,7 @@ export async function optimizeMedia(blob, mode, onProgress) {
   }
 }
 
-export async function cutMedia(blob, mode, startSeconds, endSeconds, removedRanges = [], onProgress) {
+export async function cutMedia(blob, mode, startSeconds, endSeconds, removedRanges = [], onProgress, audioEffects = {}) {
   const ffmpeg = await getFFmpeg();
   const start = Math.max(0, Number(startSeconds) || 0);
   const end = Math.max(start + 0.05, Number(endSeconds) || start + 0.05);
@@ -217,8 +228,8 @@ export async function cutMedia(blob, mode, startSeconds, endSeconds, removedRang
   try {
     await ffmpeg.writeFile(inputName, await fetchFile(blob));
     const result = ranges.length === 1
-      ? await runSingleRange(ffmpeg, inputName, outputName, mode, ranges[0])
-      : await runMultipleRanges(ffmpeg, inputName, outputName, mode, ranges);
+      ? await runSingleRange(ffmpeg, inputName, outputName, mode, ranges[0], audioEffects)
+      : await runMultipleRanges(ffmpeg, inputName, outputName, mode, ranges, audioEffects);
     if (result !== 0) throw new Error('FFmpeg no pudo aplicar los cortes.');
     const data = await ffmpeg.readFile(outputName);
     const type = mode === 'video' ? 'video/mp4' : 'audio/mp4';
@@ -228,6 +239,58 @@ export async function cutMedia(blob, mode, startSeconds, endSeconds, removedRang
     progressCallback = null;
     await safeDelete(ffmpeg, inputName);
     await safeDelete(ffmpeg, outputName);
+  }
+}
+
+// Apply filters without re-encoding picture when cuts are unchanged.
+export async function enhanceMediaAudio(blob, mode, effects = {}, onProgress) {
+  if (!hasAudioEffects(effects)) return blob;
+  const ffmpeg = await getFFmpeg();
+  const stamp = Date.now();
+  const inputName = `audio-input-${stamp}.${extensionFromMime(blob.type)}`;
+  const outputName = mode === 'audio' ? `audio-output-${stamp}.m4a` : `audio-output-${stamp}.mp4`;
+  progressCallback = onProgress || null;
+  progressCallback?.(0);
+  try {
+    await ffmpeg.writeFile(inputName, await fetchFile(blob));
+    const args = ['-i', inputName];
+    if (mode === 'video') args.push('-map', '0:v:0', '-c:v', 'copy');
+    args.push('-map', '0:a:0', '-af', audioFilterChain(effects), '-c:a', 'aac', '-b:a', '160k');
+    if (mode === 'video') args.push('-movflags', '+faststart');
+    args.push(outputName);
+    const result = await ffmpeg.exec(args);
+    if (result !== 0) throw new Error('FFmpeg no pudo aplicar los efectos de audio.');
+    const data = await ffmpeg.readFile(outputName);
+    progressCallback?.(1);
+    return new Blob([data], { type: mode === 'audio' ? 'audio/mp4' : 'video/mp4' });
+  } finally {
+    progressCallback = null;
+    await safeDelete(ffmpeg, inputName);
+    await safeDelete(ffmpeg, outputName);
+  }
+}
+
+// Short A/B samples are made from exactly the same source and time window.
+export async function createAudioComparison(blob, startSeconds, durationSeconds, effects) {
+  if (!hasAudioEffects(effects)) throw new Error('Activa al menos un efecto para comparar.');
+  const ffmpeg = await getFFmpeg();
+  const stamp = Date.now();
+  const input = `audio-compare-${stamp}.${extensionFromMime(blob.type)}`;
+  const original = `audio-original-${stamp}.m4a`;
+  const improved = `audio-enhanced-${stamp}.m4a`;
+  const start = Math.max(0, Number(startSeconds) || 0);
+  const duration = Math.min(12, Math.max(0.3, Number(durationSeconds) || 8));
+  try {
+    await ffmpeg.writeFile(input, await fetchFile(blob));
+    const common = ['-ss', String(start), '-i', input, '-t', String(duration), '-vn', '-map', '0:a:0'];
+    if (await ffmpeg.exec([...common, '-c:a', 'aac', '-b:a', '128k', original]) !== 0) throw new Error('No se pudo preparar el audio original.');
+    if (await ffmpeg.exec([...common, '-af', audioFilterChain(effects), '-c:a', 'aac', '-b:a', '128k', improved]) !== 0) throw new Error('No se pudo preparar el audio mejorado.');
+    const [before, after] = await Promise.all([ffmpeg.readFile(original), ffmpeg.readFile(improved)]);
+    return { original: new Blob([before], { type: 'audio/mp4' }), improved: new Blob([after], { type: 'audio/mp4' }) };
+  } finally {
+    await safeDelete(ffmpeg, input);
+    await safeDelete(ffmpeg, original);
+    await safeDelete(ffmpeg, improved);
   }
 }
 
