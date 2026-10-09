@@ -21,6 +21,7 @@ const LIBRARY_CATEGORIES = new Set(['intros', 'transitions', 'endings', 'cta', '
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.mov', '.m4v', '.avi', '.mkv']);
 const MAX_LIBRARY_READ_BYTES = 1024 * 1024 * 1024;
+const FFMPEG_CORE_ASSETS = new Set(['ffmpeg-core.js', 'ffmpeg-core.wasm']);
 
 function isTrustedRendererOrigin(value = '') {
   if (!value) return false;
@@ -68,6 +69,18 @@ function normalizeClipboardText(value = '') {
 function assertTrustedIpc(event) {
   const senderUrl = event?.senderFrame?.url || event?.sender?.getURL?.() || '';
   if (!isTrustedRendererOrigin(senderUrl)) throw new Error('Origen no autorizado para usar esta función.');
+}
+
+function configureFFmpegCoreIpc() {
+  ipcMain.handle('ffmpeg:read-core-asset', async (event, name) => {
+    assertTrustedIpc(event);
+    if (!FFMPEG_CORE_ASSETS.has(name)) throw new Error('Archivo del motor de audio no permitido.');
+    const root = path.join(app.getAppPath(), app.isPackaged ? 'dist' : 'public', 'ffmpeg');
+    const file = path.join(root, name);
+    const bytes = await fs.readFile(file);
+    if (!bytes.length || bytes.length > 60 * 1024 * 1024) throw new Error('Archivo FFmpeg ausente o excesivo.');
+    return new Uint8Array(bytes);
+  });
 }
 
 function configureClipboardIpc() {
@@ -534,7 +547,8 @@ app.whenReady().then(async () => {
   await migrateLegacyLibrary();
   configureMediaPermissions();
   configureLibraryIpc();
-  configureClipboardIpc();
+  configureFFmpegCoreIpc();
+configureClipboardIpc();
   configureUpdateIpc();
   rendererUrl = await startRenderer();
   await createWindow();

@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld('videosStudio', {
       return () => ipcRenderer.removeListener('update:status', handler);
     },
   },
+  ffmpeg: {
+    readCoreAsset: (name) => ipcRenderer.invoke('ffmpeg:read-core-asset', name),
+  },
   clipboard: {
     writeText: (text) => ipcRenderer.invoke('clipboard:write-text', text),
   },
