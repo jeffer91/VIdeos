@@ -25,6 +25,8 @@ jobs:
         run: node --check electron/preload.cjs
       - name: Audit workflow integration
         run: npm run audit
+      - name: Verify Vite audio core delivery
+        run: node scripts/test-ffmpeg-vite-assets.mjs
       - name: Build renderer
         run: npm run build
 
@@ -44,6 +46,8 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
       - name: Audit Videos Studio
         run: npm run audit
+      - name: Verify Vite audio core delivery
+        run: node scripts/test-ffmpeg-vite-assets.mjs
       - name: Build Windows installer
         run: npm run dist:win
       - name: Smoke test packaged app startup

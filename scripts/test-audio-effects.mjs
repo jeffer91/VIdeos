@@ -23,3 +23,14 @@ const ffmpegSource = readFileSync(new URL('../src/ffmpeg.js', import.meta.url), 
 assert.ok(ffmpegSource.includes("'-c:v', 'libx264'"), 'WebM videos must be encoded for MP4 output.');
 assert.ok(!ffmpegSource.includes("'-c:v', 'copy'"), 'VP8/VP9 cannot be stream-copied into MP4.');
 console.log('Pruebas de filtros de audio y MP4 compatible: OK');
+
+// Guards for the Vite /public import error shown in Windows.
+import { readFileSync as read } from 'node:fs';
+const fsrc = read(new URL('../src/ffmpeg.js', import.meta.url), 'utf8');
+const preload = read(new URL('../electron/preload.cjs', import.meta.url), 'utf8');
+const main = read(new URL('../electron/main.cjs', import.meta.url), 'utf8');
+assert.ok(fsrc.includes("toBlobURL"), 'FFmpeg core JS/WASM must be loaded as Blob URLs.');
+assert.ok(fsrc.includes("readBundled(name)"), 'Packaged Electron must have a secured local-asset fallback.');
+assert.ok(preload.includes("ffmpeg:read-core-asset"), 'Preload bridge must expose FFmpeg assets.');
+assert.ok(main.includes("FFMPEG_CORE_ASSETS.has(name)"), 'IPC must allowlist asset names.');
+assert.ok(fsrc.includes("return 0;"), 'Successful FFmpeg filter execution must return success.');
