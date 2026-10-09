@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import {
   getActiveProject,
   getProjectTakes,
+  getProjectPendingRetakes,
+  savePendingRetake,
   getTemplatePreferences,
   saveProject,
   saveSlideTake,
@@ -116,6 +118,16 @@ async function buildBackup(project) {
     return id;
   };
 
+  const pending = await getProjectPendingRetakes(project.id);
+  const pendingManifest = pending.map((entry) => {
+    const { blob, ...metadata } = entry.take;
+    return {
+      slideNumber: entry.slideNumber,
+      take: metadata,
+      blobRef: addBlob('pending-retake', blob, `slide-${entry.slideNumber}-pending`),
+    };
+  });
+
   const takeManifest = takes.map((take) => {
     const {
       blob,
@@ -176,6 +188,7 @@ async function buildBackup(project) {
     createdAt: new Date().toISOString(),
     project,
     takes: takeManifest,
+    pendingRetakes: pendingManifest,
     visuals: visualManifest,
     visualSettings,
     templatePreferences,
@@ -353,6 +366,12 @@ export default function ProjectBackupManager() {
           blob: getBlob(blobRef),
           cleanedBlob: getBlob(cleanedBlobRef),
         });
+      }
+
+      for (const draft of header.pendingRetakes || []) {
+        const blob = getBlob(draft.blobRef);
+        if (!blob?.size) throw new Error(`Falta la toma pendiente de la diapositiva ${draft.slideNumber}.`);
+        await savePendingRetake(newProjectId, Number(draft.slideNumber), { ...(draft.take || {}), blob });
       }
 
       const visuals = [...(header.visuals || [])].sort((a, b) => (a.slideNumber - b.slideNumber) || (a.order - b.order));

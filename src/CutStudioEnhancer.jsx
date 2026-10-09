@@ -157,7 +157,8 @@ export default function CutStudioEnhancer() {
       const nextMedia = nextTarget?.querySelector('.cut-video video, .cut-video audio') || null;
       setTarget(nextTarget || null);
       setMedia(nextMedia);
-      const nextSrc = nextMedia?.currentSrc || nextMedia?.getAttribute('src') || '';
+      // Prefer React's updated src attribute over a stale currentSrc.
+      const nextSrc = nextMedia?.getAttribute('src') || nextMedia?.currentSrc || '';
       setSrc(nextSrc);
       // Keep the native playback controls as a fallback if the advanced editor fails.
     };
@@ -254,11 +255,23 @@ export default function CutStudioEnhancer() {
     const load = async () => {
       setWaveStatus('loading');
       try {
+        const sourceBytes = Number(media?.dataset?.blobSize || 0);
+        const lengthSeconds = finiteDuration(media?.duration, durationFromTarget(target));
+        // Skip decoding before reading high-bitrate or very long recordings.
+        if (sourceBytes > 24 * 1024 * 1024 || lengthSeconds > 360) {
+          if (!cancelled) {
+            setPeaks([]);
+            setSilences([]);
+            setWaveStatus('skipped');
+            if (lengthSeconds > 0) setDuration(lengthSeconds);
+          }
+          return;
+        }
         const response = await fetch(src);
         if (!response.ok) throw new Error('No se pudo leer el audio.');
         // Decoding an entire high-bitrate video just to draw a waveform can
         // exhaust Chromium's memory. Large recordings stay manually editable.
-        const maxWaveBytes = 64 * 1024 * 1024;
+        const maxWaveBytes = 24 * 1024 * 1024;
         const declaredSize = Number(response.headers.get('content-length') || 0);
         if (declaredSize > maxWaveBytes) {
           if (!cancelled) {
@@ -308,7 +321,7 @@ export default function CutStudioEnhancer() {
     };
     load();
     return () => { cancelled = true; };
-  }, [src, target]);
+  }, [src, target, media]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

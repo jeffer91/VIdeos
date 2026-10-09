@@ -111,6 +111,10 @@
   display: none !important;
 }
 
+.cut-flow .cut-editor:not(:has(> .cut-studio-enhancer)) {
+  grid-template-rows: minmax(150px, 1fr) repeat(4, auto) !important;
+  overflow-y: auto !important;
+}
 .cut-heading-actions { display: flex; align-items: center; gap: 10px; }
 .cut-heading-actions .secondary-button { white-space: nowrap; }
 .cut-editor-mode-actions { display: flex; justify-content: flex-end; }
