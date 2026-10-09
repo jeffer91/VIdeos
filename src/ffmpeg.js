@@ -242,7 +242,7 @@ export async function cutMedia(blob, mode, startSeconds, endSeconds, removedRang
   }
 }
 
-// Apply filters without re-encoding picture when cuts are unchanged.
+// Apply audio filters while converting the unchanged source to a compatible MP4.
 export async function enhanceMediaAudio(blob, mode, effects = {}, onProgress) {
   if (!hasAudioEffects(effects)) return blob;
   const ffmpeg = await getFFmpeg();
@@ -254,7 +254,9 @@ export async function enhanceMediaAudio(blob, mode, effects = {}, onProgress) {
   try {
     await ffmpeg.writeFile(inputName, await fetchFile(blob));
     const args = ['-i', inputName];
-    if (mode === 'video') args.push('-map', '0:v:0', '-c:v', 'copy');
+    // MediaRecorder normally produces VP8/VP9 WebM. Copying that video to
+    // MP4 is unsupported; encode H.264 while retaining the original Blob.
+    if (mode === 'video') args.push('-map', '0:v:0', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-pix_fmt', 'yuv420p');
     args.push('-map', '0:a:0', '-af', audioFilterChain(effects), '-c:a', 'aac', '-b:a', '160k');
     if (mode === 'video') args.push('-movflags', '+faststart');
     args.push(outputName);
