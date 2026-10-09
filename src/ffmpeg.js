@@ -106,7 +106,7 @@ function outputNameFor(kind) {
 async function runWithAudioFallback(ffmpeg, args, effects = {}, label = 'procesar audio') {
   recentLogs = [];
   let result = await ffmpeg.exec(args);
-  if (result === 0) return;
+  if (result === 0) return 0;
   if (!hasAudioEffects(effects)) throw explainFFmpegError(`No se pudo ${label}`);
   // Some wasm builds omit afftdn/loudnorm. Use built-in EQ rather than fail
   // and never claim the full quality treatment was applied silently.
@@ -119,8 +119,9 @@ async function runWithAudioFallback(ffmpeg, args, effects = {}, label = 'procesa
   retry[index + 1] = String(retry[index + 1]).replace(advanced, safe);
   if (retry[index + 1] === args[index + 1]) throw explainFFmpegError(`No se pudo ${label}`);
   recentLogs = [];
-  result = await ffmpeg.exec(retry);
+  result = await ffmpeg.exec(['-y', ...retry]);
   if (result !== 0) throw explainFFmpegError(`No se pudo ${label} ni con filtros compatibles`);
+  return 0;
 }
 
 function normalizeRanges(ranges = [], start, end) {
