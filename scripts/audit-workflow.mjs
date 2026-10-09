@@ -199,7 +199,9 @@ for (const label of navOrder) {
   previousIndex = index;
 }
 
-assert(production.includes("import { cutMedia } from './ffmpeg';"), 'Corte debe usar cutMedia.');
+assert(production.includes("import { cutMedia, enhanceMediaAudio, createAudioComparison } from './ffmpeg';"), 'Corte debe importar el recorte, mejora de audio y comparación.');
+assert(production.includes('await cutMedia('), 'Corte debe seguir procesando los fragmentos seleccionados.');
+assert(production.includes('await enhanceMediaAudio('), 'Corte debe mejorar audio aun sin recortar el video.');
 assert(production.includes('getRecordingMeta'), 'La recuperación de grabaciones debe leer metadata.');
 assert(production.includes('deleteSlideTake'), 'La actualización de contenido debe poder limpiar tomas huérfanas.');
 assert(production.includes('Transición después de esta escena'), 'La transición debe modelarse como un clip después de una escena (modo A).');
