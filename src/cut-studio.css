@@ -102,12 +102,42 @@
   order: 1;
 }
 
-/* El sistema anterior sigue en DOM para conservar la lógica, pero ya no duplica la interfaz. */
-.cut-flow .trim-controls,
-.cut-flow .internal-cut-editor,
-.cut-flow .cut-summary,
-.cut-flow .cut-editor > .primary-button {
+/* Hide original controls ONLY when the enhanced editor is actually mounted.
+   When it fails or the user chooses basic mode, originals stay reachable. */
+.cut-flow .cut-editor:has(> .cut-studio-enhancer):not([data-editor-mode='basic']) .trim-controls,
+.cut-flow .cut-editor:has(> .cut-studio-enhancer):not([data-editor-mode='basic']) .internal-cut-editor,
+.cut-flow .cut-editor:has(> .cut-studio-enhancer):not([data-editor-mode='basic']) .cut-summary,
+.cut-flow .cut-editor:has(> .cut-studio-enhancer):not([data-editor-mode='basic']) > .primary-button {
   display: none !important;
+}
+
+.cut-heading-actions { display: flex; align-items: center; gap: 10px; }
+.cut-heading-actions .secondary-button { white-space: nowrap; }
+.cut-editor-mode-actions { display: flex; justify-content: flex-end; }
+.cut-editor-mode-actions button {
+  border: 1px solid #cfd9e3;
+  border-radius: 6px;
+  padding: 4px 9px;
+  background: #fff;
+  color: #3152ad;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cut-flow .cut-editor[data-editor-mode='basic'] {
+  grid-template-rows: auto minmax(150px, 1fr) repeat(4, auto) !important;
+  overflow-y: auto !important;
+}
+.cut-flow .cut-editor[data-editor-mode='basic'] > .cut-studio-enhancer {
+  order: -1 !important;
+  grid-template-rows: auto;
+}
+.cut-flow .cut-editor[data-editor-mode='basic'] .trim-controls,
+.cut-flow .cut-editor[data-editor-mode='basic'] .internal-cut-editor,
+.cut-flow .cut-editor[data-editor-mode='basic'] .cut-summary,
+.cut-flow .cut-editor[data-editor-mode='basic'] > .primary-button {
+  display: revert !important;
 }
 
 .cut-studio-enhancer {

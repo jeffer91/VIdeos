@@ -135,6 +135,7 @@ export default function CutStudioEnhancer() {
   const [src, setSrc] = useState('');
   const [playing, setPlaying] = useState(false);
   const [previewing, setPreviewing] = useState(false);
+  const [basicMode, setBasicMode] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [peaks, setPeaks] = useState([]);
@@ -158,7 +159,7 @@ export default function CutStudioEnhancer() {
       setMedia(nextMedia);
       const nextSrc = nextMedia?.currentSrc || nextMedia?.getAttribute('src') || '';
       setSrc(nextSrc);
-      if (nextMedia) nextMedia.controls = false;
+      // Keep the native playback controls as a fallback if the advanced editor fails.
     };
 
     const observer = new MutationObserver(sync);
@@ -168,6 +169,12 @@ export default function CutStudioEnhancer() {
   }, []);
 
   useEffect(() => {
+    if (!target) return undefined;
+    target.dataset.editorMode = basicMode ? 'basic' : 'advanced';
+    return () => { delete target.dataset.editorMode; };
+  }, [target, basicMode]);
+
+  useEffect(() => {
     if (!media) {
       setPlaying(false);
       setCurrentTime(0);
@@ -175,7 +182,7 @@ export default function CutStudioEnhancer() {
       return undefined;
     }
 
-    media.controls = false;
+    // Native controls remain available even when the timeline is enhanced.
     const getDuration = () => finiteDuration(media.duration, durationFromTarget(target));
     const syncTime = () => {
       setCurrentTime(Number.isFinite(media.currentTime) ? media.currentTime : 0);
@@ -249,7 +256,31 @@ export default function CutStudioEnhancer() {
       try {
         const response = await fetch(src);
         if (!response.ok) throw new Error('No se pudo leer el audio.');
-        const buffer = await response.arrayBuffer();
+        // Decoding an entire high-bitrate video just to draw a waveform can
+        // exhaust Chromium's memory. Large recordings stay manually editable.
+        const maxWaveBytes = 64 * 1024 * 1024;
+        const declaredSize = Number(response.headers.get('content-length') || 0);
+        if (declaredSize > maxWaveBytes) {
+          if (!cancelled) {
+            setPeaks([]);
+            setSilences([]);
+            setWaveStatus('skipped');
+            setDuration((previous) => finiteDuration(previous, durationFromTarget(target)));
+          }
+          await response.body?.cancel?.().catch(() => {});
+          return;
+        }
+        const sourceBlob = await response.blob();
+        if (sourceBlob.size > maxWaveBytes) {
+          if (!cancelled) {
+            setPeaks([]);
+            setSilences([]);
+            setWaveStatus('skipped');
+            setDuration((previous) => finiteDuration(previous, durationFromTarget(target)));
+          }
+          return;
+        }
+        const buffer = await sourceBlob.arrayBuffer();
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         if (!AudioContextClass) throw new Error('El analizador de audio no está disponible.');
         const context = new AudioContextClass();
@@ -328,7 +359,7 @@ export default function CutStudioEnhancer() {
       context.fillStyle = '#94a3b8';
       context.font = '11px system-ui, sans-serif';
       context.textAlign = 'center';
-      context.fillText(waveStatus === 'loading' ? 'Analizando audio…' : 'Edición disponible sin onda.', width / 2, middle + 4);
+      context.fillText(waveStatus === 'loading' ? 'Analizando audio…' : waveStatus === 'skipped' ? 'Video grande: edición manual disponible.' : 'Edición disponible sin onda.', width / 2, middle + 4);
     }
 
     if (timeline.start > 0) {
@@ -513,6 +544,12 @@ export default function CutStudioEnhancer() {
 
   return createPortal(
     <section className="cut-studio-enhancer" aria-label="Controles de edición">
+      <div className="cut-editor-mode-actions">
+        <button type="button" onClick={() => setBasicMode((value) => !value)}>
+          {basicMode ? 'Volver al editor avanzado' : 'Edición básica / recuperar controles'}
+        </button>
+      </div>
+      {!basicMode && <>
       <div className="cut-transport">
         <div className="cut-scene-name">
           <span>ESCENA {label.number || '—'}</span>
@@ -572,6 +609,7 @@ export default function CutStudioEnhancer() {
         <small>IN {formatClock(timeline.start)} · OUT {formatClock(timeline.end || safeDuration)} · SALIDA ≈ {formatClock(outputDuration)} · Espacio = Play/Pausa</small>
         <button type="button" className="primary-button" onClick={saveAndNext}>Guardar y siguiente →</button>
       </div>
+      </>}
     </section>,
     target,
   );

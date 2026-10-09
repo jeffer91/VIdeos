@@ -53,6 +53,7 @@ export default function WorkflowEnhancer() {
 
   useEffect(() => {
     refreshData().catch(() => {});
+    // Events refresh counts immediately; interval only reconciles external changes.
     const timer = window.setInterval(() => refreshData().catch(() => {}), 10000);
     const onChange = () => refreshData().catch(() => {});
     window.addEventListener('videosstudio:visuals-changed', onChange);
