@@ -11,6 +11,12 @@ import {
   getChunks,
   getProjectTakes,
   getRecordingMeta,
+  getSlideTake,
+  getPendingRetake,
+  getProjectPendingRetakes,
+  savePendingRetake,
+  deletePendingRetake,
+  commitAcceptedRetake,
   saveChunk,
   saveProject,
   saveSlideTake,
@@ -187,6 +193,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
   const [micLevel, setMicLevel] = useState(0);
   const [recordingBlob, setRecordingBlob] = useState(null);
   const [pendingRetake, setPendingRetake] = useState(null);
+  const [acceptingTake, setAcceptingTake] = useState(false);
   const [prompterFontSize, setPrompterFontSize] = useState(() => readPrompterPreference('font', 40, 28, 56));
   const [prompterSpeed, setPrompterSpeed] = useState(() => readPrompterPreference('speed', 18, 5, 45));
   const [prompterRunning, setPrompterRunning] = useState(false);
@@ -484,13 +491,20 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
         else if (chunks.length) await clearRecordingData();
 
         if (active) {
-          const rows = await getProjectTakes(active.id);
+          const [rows, drafts] = await Promise.all([
+            getProjectTakes(active.id),
+            getProjectPendingRetakes(active.id),
+          ]);
+          if (!mountedRef.current) return;
           const mapped = rowsToMap(rows);
           setProject(active);
           setRawText(active.rawText || '');
           setTakes(mapped);
+          const draftIndex = drafts.length
+            ? active.slides.findIndex((slide) => Number(slide.number) === Number(drafts[0].slideNumber))
+            : -1;
           const pending = active.slides.findIndex((slide) => !mapped[slide.number]?.accepted);
-          setCurrentSlideIndex(pending >= 0 ? pending : 0);
+          setCurrentSlideIndex(draftIndex >= 0 ? draftIndex : pending >= 0 ? pending : 0);
           setView('recording');
         } else {
           await refreshDevices(null).catch(() => {});
@@ -517,25 +531,46 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
       stopMediaStream();
       return;
     }
+    let cancelled = false;
+    stopMediaStream();
     setRetaking(false);
     setPendingRetake(null);
+    setStatus('detecting');
     setRecordingView('camera');
     resetPrompter();
-    const take = takes[currentSlide.number];
-    if (take?.blob) {
-      stopMediaStream();
-      setRecordingBlob(take.blob);
-      setMode(take.mode || 'video');
-      elapsedRef.current = take.durationMs || 0;
-      setElapsedMs(elapsedRef.current);
-      if (take.width && take.height) setResolution({ width: take.width, height: take.height, frameRate: take.frameRate || 0 });
-      setStatus('stopped');
-      return;
-    }
-    setRecordingBlob(null);
-    elapsedRef.current = 0;
-    setElapsedMs(0);
-    openStream({ mode, cameraId, microphoneId });
+    const projectId = project.id;
+    const slideNumber = currentSlide.number;
+    const load = async () => {
+      try {
+        const draft = await getPendingRetake(projectId, slideNumber);
+        if (cancelled) return;
+        const take = draft || takes[slideNumber];
+        if (take?.blob) {
+          setPendingRetake(draft || null);
+          setRecordingBlob(take.blob);
+          setMode(take.mode || 'video');
+          elapsedRef.current = take.durationMs || 0;
+          setElapsedMs(elapsedRef.current);
+          setResolution(take.width && take.height
+            ? { width: take.width, height: take.height, frameRate: take.frameRate || 0 }
+            : null);
+          setStatus('stopped');
+          if (draft) setNotice(`Diapositiva ${slideNumber}: tienes una nueva toma pendiente de aceptar. La anterior sigue guardada.`);
+        } else {
+          setRecordingBlob(null);
+          elapsedRef.current = 0;
+          setElapsedMs(0);
+          await openStream({ mode, cameraId, microphoneId });
+        }
+      } catch (caught) {
+        if (cancelled) return;
+        console.error('Error al recuperar el borrador de grabación:', caught);
+        setStatus('idle');
+        setError('No se pudo comprobar si hay una toma pendiente. No grabes hasta recuperar el almacenamiento local.');
+      }
+    };
+    load();
+    return () => { cancelled = true; };
   }, [view, project?.id, currentSlideIndex]);
 
   useEffect(() => {
@@ -701,6 +736,12 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
       }
       await navigator.storage?.persist?.();
       if (controller.signal.aborted) return;
+      const unfinished = await getRecordingMeta();
+      if (unfinished?.projectId && (await getChunks()).length) {
+        setError('Hay una grabación interrumpida pendiente. Recupérala o descártala antes de iniciar otra.');
+        setStatus('ready');
+        return;
+      }
       await clearRecordingData();
       if (controller.signal.aborted) return;
       pendingWritesRef.current = [];
@@ -750,8 +791,10 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
           };
           // Never overwrite an existing take until the user accepts the new one.
           // An unsuccessful retake must not destroy their previous recording.
-          const hasPreviousTake = Boolean(takes[slideNumber]?.blob);
+          const savedOriginal = await getSlideTake(projectId, slideNumber);
+          const hasPreviousTake = Boolean(savedOriginal?.blob);
           if (hasPreviousTake) {
+            await savePendingRetake(projectId, slideNumber, take);
             setPendingRetake(take);
           } else {
             await saveSlideTake(projectId, slideNumber, take);
@@ -834,27 +877,21 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
   }
 
   async function acceptTake() {
-    if (!project || !currentSlide || !recordingBlob) return;
+    if (!project || !currentSlide || !recordingBlob || acceptingTake) return;
     const previous = takes[currentSlide.number] || {};
     const replacing = Boolean(pendingRetake);
     const nextTake = replacing
-      ? { ...pendingRetake, accepted: true }
+      ? { ...pendingRetake, accepted: true, cleanedBlob: null, cleanedDurationMs: null, cleanedAt: null,
+          trimStart: 0, trimEnd: null, removedRanges: [] }
       : { ...previous, blob: recordingBlob, accepted: true, durationMs: elapsedRef.current };
+    setAcceptingTake(true);
+    setError('');
     try {
-      await saveSlideTake(project.id, currentSlide.number, nextTake);
-      // A new source recording invalidates any old cut and assembled scene.
       if (replacing) {
-        const scenes = { ...(project.productionPlan?.scenes || {}) };
-        if (scenes[currentSlide.number]) {
-          scenes[currentSlide.number] = { ...scenes[currentSlide.number], ready: false };
-        }
-        const updatedProject = {
-          ...project,
-          productionPlan: { ...(project.productionPlan || {}), scenes },
-          updatedAt: Date.now(),
-        };
-        await saveProject(updatedProject);
-        setProject(updatedProject);
+        const updatedProject = await commitAcceptedRetake(project.id, currentSlide.number, nextTake);
+        setProject(normalizeProject(updatedProject));
+      } else {
+        await saveSlideTake(project.id, currentSlide.number, nextTake);
       }
       const nextMap = { ...takes, [currentSlide.number]: nextTake };
       setTakes(nextMap);
@@ -872,11 +909,22 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
       }
     } catch (caught) {
       console.error('No se pudo aceptar la nueva toma.', caught);
-      setError(caught?.message || 'No se pudo aceptar la grabación. Intenta de nuevo.');
+      setError(caught?.message || 'No se pudo aceptar la grabación. La anterior sigue guardada.');
+    } finally {
+      setAcceptingTake(false);
     }
   }
 
   async function repeatTake() {
+    if (pendingRetake) {
+      if (!window.confirm('Hay una nueva toma pendiente. ¿Descartarla para grabar otra? La anterior se conservará.')) return;
+      try {
+        await deletePendingRetake(project.id, currentSlide.number);
+      } catch (caught) {
+        setError(caught?.message || 'No se pudo descartar la toma pendiente.');
+        return;
+      }
+    }
     setPendingRetake(null);
     setRecordingBlob(null);
     elapsedRef.current = 0;
@@ -893,18 +941,23 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     setNotice('La grabación anterior se conservará hasta que aceptes la nueva toma.');
   }
 
-  function discardPendingRetake() {
-    if (['recording', 'paused', 'saving', 'countdown'].includes(status)) return;
-    stopMediaStream();
-    clearPrompterDelay();
-    setPendingRetake(null);
-    setRetaking(false);
-    setRecordingBlob(currentTake?.blob || null);
-    elapsedRef.current = currentTake?.durationMs || 0;
-    setElapsedMs(elapsedRef.current);
-    setMode(currentTake?.mode || 'video');
-    setStatus(currentTake?.blob ? 'stopped' : 'idle');
-    setNotice('Se conservó la grabación anterior. No se reemplazó ningún archivo.');
+  async function discardPendingRetake() {
+    if (['recording', 'paused', 'saving', 'countdown'].includes(status) || !project || !currentSlide) return;
+    try {
+      await deletePendingRetake(project.id, currentSlide.number);
+      stopMediaStream();
+      clearPrompterDelay();
+      setPendingRetake(null);
+      setRetaking(false);
+      setRecordingBlob(currentTake?.blob || null);
+      elapsedRef.current = currentTake?.durationMs || 0;
+      setElapsedMs(elapsedRef.current);
+      setMode(currentTake?.mode || 'video');
+      setStatus(currentTake?.blob ? 'stopped' : 'idle');
+      setNotice('Se conservó la grabación anterior. No se reemplazó ningún archivo.');
+    } catch (caught) {
+      setError(caught?.message || 'No se pudo descartar el borrador.');
+    }
   }
 
   function rerecordSelectedCut() {
@@ -930,11 +983,15 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
         removedRanges: [],
         createdAt: meta.createdAt || Date.now(),
       };
-      await saveSlideTake(meta.projectId, meta.slideNumber, take);
+      const previous = await getSlideTake(meta.projectId, meta.slideNumber);
+      const replacing = Boolean(previous?.blob);
+      if (replacing) await savePendingRetake(meta.projectId, meta.slideNumber, take);
+      else await saveSlideTake(meta.projectId, meta.slideNumber, take);
       await clearRecordingData();
       if (project?.id === meta.projectId) {
         const index = project.slides.findIndex((slide) => slide.number === meta.slideNumber);
-        setTakes((old) => ({ ...old, [meta.slideNumber]: take }));
+        if (replacing) setPendingRetake(take);
+        else setTakes((old) => ({ ...old, [meta.slideNumber]: take }));
         if (index >= 0) setCurrentSlideIndex(index);
         setMode(take.mode);
         setRecordingBlob(blob);
@@ -944,7 +1001,10 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
         setView('recording');
       }
       setRecoveryMeta(null);
-      setNotice(`Se recuperó la toma de la diapositiva ${meta.slideNumber}.`);
+      setNotice(replacing
+        ? `Se recuperó una nueva toma pendiente de la diapositiva ${meta.slideNumber}; la original se mantiene.`
+        : `Se recuperó la toma de la diapositiva ${meta.slideNumber}.`);
+      window.dispatchEvent(new CustomEvent('videosstudio:project-plan-changed'));
     } catch (caught) {
       setError(caught.message || 'No se pudo recuperar la grabación.');
     }
@@ -998,6 +1058,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
       const nextMap = { ...takes, [cutSlide.number]: nextTake };
       setTakes(nextMap);
       setNotice(`Diapositiva ${cutSlide.number} limpia y guardada.`);
+      window.dispatchEvent(new CustomEvent('videosstudio:project-plan-changed'));
       const nextPending = project.slides.findIndex((slide, index) => index > cutSlideIndex && nextMap[slide.number]?.accepted && !nextMap[slide.number]?.cleanedBlob);
       if (nextPending >= 0) setCutSlideIndex(nextPending);
     } catch (caught) {
@@ -1117,6 +1178,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     if (view === 'recording' && recoveryMeta) {
       return 'Recupera o descarta la grabación interrumpida antes de salir de Grabación.';
     }
+    if (acceptingTake) return 'Espera a que se termine de guardar la grabación.';
     return '';
   }
 
@@ -1126,6 +1188,9 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     if (blocked) {
       setError(blocked);
       return false;
+    }
+    if (view === 'recording' && pendingRetake && nextView !== 'recording') {
+      if (!window.confirm('La toma nueva quedará guardada como borrador, sin reemplazar la anterior. ¿Salir ahora?')) return false;
     }
     setError('');
     setView(nextView);
@@ -1140,7 +1205,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     };
     window.addEventListener('videosstudio:navigate', handleNavigationRequest);
     return () => window.removeEventListener('videosstudio:navigate', handleNavigationRequest);
-  }, [view, status, recoveryMeta]);
+  }, [view, status, recoveryMeta, pendingRetake, acceptingTake]);
 
   function invalidateScene(scenes, slideNumber) {
     const next = { ...(scenes || {}) };
@@ -1338,7 +1403,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
               <div className="production-card camera-production-card">
                 <div className="recording-topline"><div className="mode-switch"><button className={mode === 'video' ? 'active' : ''} onClick={() => { setMode('video'); openStream({ mode: 'video' }); }} disabled={busyRecording || (!!currentTake?.blob && !retaking)}>Video + audio</button><button className={mode === 'audio' ? 'active' : ''} onClick={() => { setMode('audio'); openStream({ mode: 'audio' }); }} disabled={busyRecording || (!!currentTake?.blob && !retaking)}>Solo audio</button></div><div className="device-selects">{mode === 'video' && <select value={cameraId} onChange={(event) => { setCameraId(event.target.value); openStream({ cameraId: event.target.value }); }} disabled={busyRecording || status === 'stopped'}><option value="">Cámara predeterminada</option>{devices.cameras.map((device, index) => <option key={device.deviceId || index} value={device.deviceId}>{device.label || `Cámara ${index + 1}`}</option>)}</select>}<select value={microphoneId} onChange={(event) => { setMicrophoneId(event.target.value); openStream({ microphoneId: event.target.value }); }} disabled={busyRecording || status === 'stopped'}><option value="">Micrófono predeterminado</option>{devices.microphones.map((device, index) => <option key={device.deviceId || index} value={device.deviceId}>{device.label || `Micrófono ${index + 1}`}</option>)}</select></div><span className={`status-pill status-${status}`}><i className="status-dot" />{statusLabel}</span></div>
                 <div className="production-stage">{guides && recordingView === 'camera' && !busyRecording && status !== 'stopped' && <FramingGuides />}{status === 'countdown' && <div className="recording-countdown" role="status"><strong>{countdown}</strong><span>Prepárate · aún no se está grabando</span></div>}{mode === 'video' ? (recordingUrl && status === 'stopped' ? <video src={recordingUrl} controls playsInline /> : <video ref={liveVideoRef} className="live-video" muted autoPlay playsInline />) : <div className="audio-stage">{recordingUrl && status === 'stopped' ? <audio src={recordingUrl} controls /> : 'Micrófono preparado'}</div>}{(status === 'recording' || status === 'paused') && <div className="rec-indicator">{status === 'paused' ? 'PAUSA' : 'REC'}</div>}</div>
-                <div className="recording-bottom"><div className="mic-meter"><span>MIC</span><div><i style={{ width: `${Math.max(streamRef.current ? 2 : 0, micLevel)}%` }} /></div><strong>{micLevel}%</strong></div><div className="record-clock">{formatTime(elapsedMs)}</div><div className="record-actions">{status === 'ready' && <><button className="record-button" onClick={startRecording} disabled={!currentSlide.reading?.trim()}>Grabar</button>{retaking && currentTake?.blob && <button className="secondary-button" onClick={discardPendingRetake}>Cancelar regrabación</button>}</>}{status === 'countdown' && <button className="secondary-button" onClick={cancelCountdown}>Cancelar</button>}{status === 'detecting' && <button className="secondary-button" disabled>Detectando…</button>}{status === 'idle' && <><button className="secondary-button" onClick={() => openStream()}>Reintentar</button>{currentTake?.blob && <button className="secondary-button" onClick={discardPendingRetake}>Conservar anterior</button>}</>}{status === 'recording' && <><button className="secondary-button" onClick={pauseRecording}>Pausar</button><button className="danger-button" onClick={stopRecording}>Finalizar</button></>}{status === 'paused' && <><button className="primary-button small" onClick={resumeRecording}>Continuar</button><button className="danger-button" onClick={stopRecording}>Finalizar</button></>}{status === 'saving' && <button className="secondary-button" disabled>Guardando…</button>}{status === 'stopped' && <><button className="secondary-button" onClick={repeatTake}>{currentTake?.accepted ? 'Regrabar' : 'Repetir'}</button>{pendingRetake && <button className="secondary-button" onClick={discardPendingRetake}>Conservar anterior</button>}{(!currentTake?.accepted || pendingRetake) && <button className="accept-button" onClick={acceptTake}>{pendingRetake ? 'Aceptar nueva toma' : 'Aceptar'}</button>}</>}</div></div>
+                <div className="recording-bottom"><div className="mic-meter"><span>MIC</span><div><i style={{ width: `${Math.max(streamRef.current ? 2 : 0, micLevel)}%` }} /></div><strong>{micLevel}%</strong></div><div className="record-clock">{formatTime(elapsedMs)}</div><div className="record-actions">{status === 'ready' && <><button className="record-button" onClick={startRecording} disabled={!currentSlide.reading?.trim()}>Grabar</button>{retaking && currentTake?.blob && <button className="secondary-button" onClick={discardPendingRetake}>Cancelar regrabación</button>}</>}{status === 'countdown' && <button className="secondary-button" onClick={cancelCountdown}>Cancelar</button>}{status === 'detecting' && <button className="secondary-button" disabled>Detectando…</button>}{status === 'idle' && <><button className="secondary-button" onClick={() => openStream()}>Reintentar</button>{currentTake?.blob && <button className="secondary-button" onClick={discardPendingRetake}>Conservar anterior</button>}</>}{status === 'recording' && <><button className="secondary-button" onClick={pauseRecording}>Pausar</button><button className="danger-button" onClick={stopRecording}>Finalizar</button></>}{status === 'paused' && <><button className="primary-button small" onClick={resumeRecording}>Continuar</button><button className="danger-button" onClick={stopRecording}>Finalizar</button></>}{status === 'saving' && <button className="secondary-button" disabled>Guardando…</button>}{status === 'stopped' && <><button className="secondary-button" onClick={repeatTake} disabled={acceptingTake}>{currentTake?.accepted ? 'Regrabar' : 'Repetir'}</button>{pendingRetake && <button className="secondary-button" onClick={discardPendingRetake} disabled={acceptingTake}>Conservar anterior</button>}{(!currentTake?.accepted || pendingRetake) && <button className="accept-button" onClick={acceptTake} disabled={acceptingTake}>{pendingRetake ? 'Aceptar nueva toma' : 'Aceptar'}</button>}</>}</div></div>
                 <div className="capture-meta"><span>{resolution ? `${resolution.width}×${resolution.height}` : '—'}</span><span>{resolution?.frameRate ? `${Math.round(resolution.frameRate)} fps` : '—'}</span><span>{recordingBlob ? formatBytes(recordingBlob.size) : 'Sin toma'}</span></div>
               </div>
               <aside className="production-card prompter-production-card">
@@ -1358,7 +1423,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
             <div className="flow-heading"><div><span className="eyebrow">3 · CORTE</span><h1>Limpiar cada grabación</h1><p>Recorta inicio/final y elimina silencios o errores internos.</p></div><div className="cut-heading-actions"><button type="button" className="secondary-button" onClick={rerecordSelectedCut} disabled={!cutTake?.accepted || cutting}>↺ Regrabar diapositiva {cutSlide?.number || ''}</button><span className="flow-counter">{cleanedCount}/{project.slides.length} limpias</span></div></div>
             <div className="cut-grid">
               <div className="production-card cut-list">{project.slides.map((slide, index) => { const take = takes[slide.number]; return <button key={slide.number} className={`${index === cutSlideIndex ? 'active' : ''} ${take?.cleanedBlob ? 'done' : ''}`} onClick={() => setCutSlideIndex(index)} disabled={!take?.accepted}><span>{String(slide.number).padStart(2, '0')}</span><div><strong>{slide.title}</strong><small>{!take?.accepted ? 'Falta grabación aceptada' : take?.cleanedBlob ? '✓ Limpia' : 'Pendiente de corte'}</small></div></button>; })}</div>
-              <div className="production-card cut-editor">{cutTake?.accepted ? <><div className="cut-video">{cutTake.mode === 'audio' ? <audio src={cutUrl} controls /> : <video src={cutUrl} controls playsInline />}</div><div className="trim-controls"><label><span>Inicio</span><input type="number" min="0" step="0.1" value={trimStart} onChange={(event) => setTrimStart(Number(event.target.value))} /></label><div className="trim-track"><div /><span>{formatTime(cutTake.durationMs || 0)}</span></div><label><span>Final</span><input type="number" min="0.1" step="0.1" value={trimEnd} onChange={(event) => setTrimEnd(Number(event.target.value))} /></label></div><div className="internal-cut-editor"><strong>Cortes internos</strong><div className="internal-cut-inputs"><label><span>Desde</span><input type="number" min={trimStart} step="0.1" value={rangeStart} onChange={(event) => setRangeStart(Number(event.target.value))} /></label><label><span>Hasta</span><input type="number" min={trimStart} step="0.1" value={rangeEnd} onChange={(event) => setRangeEnd(Number(event.target.value))} /></label><button className="secondary-button" onClick={addInternalCut}>Eliminar tramo</button></div><div className="cut-range-list">{removedRanges.length ? removedRanges.map((range, index) => <span key={`${range.start}-${range.end}-${index}`}>{range.start.toFixed(1)}–{range.end.toFixed(1)} s <button onClick={() => setRemovedRanges((old) => old.filter((_item, i) => i !== index))}>×</button></span>) : <small>Sin cortes internos.</small>}</div></div><div className="cut-summary"><span>Original: {formatTime(cutTake.durationMs)}</span><span>Salida estimada: {formatTime(cleanedDurationSeconds(Number(trimStart) || 0, Number(trimEnd) || 0, removedRanges) * 1000)}</span><span>{cutTake.cleanedBlob ? `Limpia: ${formatBytes(cutTake.cleanedBlob.size)}` : 'Sin versión limpia'}</span></div><button className="primary-button" onClick={applyCut} disabled={cutting}>{cutting ? `Procesando ${Math.round(cutProgress * 100)}%` : 'Guardar corte limpio'}</button></> : <div className="empty-state">Selecciona una diapositiva grabada y aceptada.</div>}</div>
+              <div className="production-card cut-editor">{cutTake?.accepted ? <><div className="cut-video">{cutTake.mode === 'audio' ? <audio src={cutUrl} data-blob-size={cutBlob?.size || 0} controls /> : <video src={cutUrl} data-blob-size={cutBlob?.size || 0} controls playsInline />}</div><div className="trim-controls"><label><span>Inicio</span><input type="number" min="0" step="0.1" value={trimStart} onChange={(event) => setTrimStart(Number(event.target.value))} /></label><div className="trim-track"><div /><span>{formatTime(cutTake.durationMs || 0)}</span></div><label><span>Final</span><input type="number" min="0.1" step="0.1" value={trimEnd} onChange={(event) => setTrimEnd(Number(event.target.value))} /></label></div><div className="internal-cut-editor"><strong>Cortes internos</strong><div className="internal-cut-inputs"><label><span>Desde</span><input type="number" min={trimStart} step="0.1" value={rangeStart} onChange={(event) => setRangeStart(Number(event.target.value))} /></label><label><span>Hasta</span><input type="number" min={trimStart} step="0.1" value={rangeEnd} onChange={(event) => setRangeEnd(Number(event.target.value))} /></label><button className="secondary-button" onClick={addInternalCut}>Eliminar tramo</button></div><div className="cut-range-list">{removedRanges.length ? removedRanges.map((range, index) => <span key={`${range.start}-${range.end}-${index}`}>{range.start.toFixed(1)}–{range.end.toFixed(1)} s <button onClick={() => setRemovedRanges((old) => old.filter((_item, i) => i !== index))}>×</button></span>) : <small>Sin cortes internos.</small>}</div></div><div className="cut-summary"><span>Original: {formatTime(cutTake.durationMs)}</span><span>Salida estimada: {formatTime(cleanedDurationSeconds(Number(trimStart) || 0, Number(trimEnd) || 0, removedRanges) * 1000)}</span><span>{cutTake.cleanedBlob ? `Limpia: ${formatBytes(cutTake.cleanedBlob.size)}` : 'Sin versión limpia'}</span></div><button className="primary-button" onClick={applyCut} disabled={cutting}>{cutting ? `Procesando ${Math.round(cutProgress * 100)}%` : 'Guardar corte limpio'}</button></> : <div className="empty-state">Selecciona una diapositiva grabada y aceptada.</div>}</div>
             </div>
           </section>
         )}

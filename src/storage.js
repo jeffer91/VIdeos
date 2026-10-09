@@ -8,6 +8,7 @@ const RECORDING_META_KEY = 'recording';
 const ACTIVE_PROJECT_KEY = 'active-project';
 const TEMPLATE_METADATA_KEY = 'template-metadata';
 const TEMPLATE_PREFERENCES_PREFIX = 'template-preferences:';
+const PENDING_RETAKE_PREFIX = 'pending-retake:';
 
 let dbPromise;
 
@@ -72,6 +73,9 @@ function takeKey(projectId, slideNumber) {
 function templatePreferencesKey(projectId) {
   return `${TEMPLATE_PREFERENCES_PREFIX}${projectId}`;
 }
+function pendingRetakeKey(projectId, slideNumber) {
+  return `${PENDING_RETAKE_PREFIX}${projectId}:${slideNumber}`;
+}
 
 function takeMetadata(row) {
   if (!row) return null;
@@ -129,6 +133,92 @@ export async function getRecordingMeta() {
   const value = await requestValue(tx.objectStore(META_STORE).get(RECORDING_META_KEY));
   await transactionDone(tx);
   return value;
+}
+
+// An unaccepted replacement is independent of the original recorded take.
+export async function savePendingRetake(projectId, slideNumber, take) {
+  if (!projectId || !Number.isInteger(Number(slideNumber)) || !(take?.blob instanceof Blob) || !take.blob.size) {
+    throw new Error('La nueva toma no es válida para guardar como borrador.');
+  }
+  const db = await openDb();
+  const tx = db.transaction(META_STORE, 'readwrite');
+  tx.objectStore(META_STORE).put({
+    key: pendingRetakeKey(projectId, slideNumber),
+    projectId,
+    slideNumber: Number(slideNumber),
+    take,
+    updatedAt: Date.now(),
+  });
+  await transactionDone(tx);
+}
+
+export async function getPendingRetake(projectId, slideNumber) {
+  if (!projectId || !slideNumber) return null;
+  const db = await openDb();
+  const tx = db.transaction(META_STORE, 'readonly');
+  const row = await requestValue(tx.objectStore(META_STORE).get(pendingRetakeKey(projectId, slideNumber)));
+  await transactionDone(tx);
+  return row?.take || null;
+}
+
+export async function getProjectPendingRetakes(projectId) {
+  if (!projectId) return [];
+  const db = await openDb();
+  const tx = db.transaction(META_STORE, 'readonly');
+  const rows = (await requestValue(tx.objectStore(META_STORE).getAll())) || [];
+  await transactionDone(tx);
+  return rows.filter((row) =>
+    row?.key?.startsWith(`${PENDING_RETAKE_PREFIX}${projectId}:`)
+    && row.take?.blob instanceof Blob && row.take.blob.size > 0
+  ).sort((a, b) => (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0));
+}
+
+export async function deletePendingRetake(projectId, slideNumber) {
+  if (!projectId || !slideNumber) return;
+  const db = await openDb();
+  const tx = db.transaction(META_STORE, 'readwrite');
+  tx.objectStore(META_STORE).delete(pendingRetakeKey(projectId, slideNumber));
+  await transactionDone(tx);
+}
+
+// A replacement, scene invalidation and removal of the draft are atomic.
+export async function commitAcceptedRetake(projectId, slideNumber, take) {
+  if (!(take?.blob instanceof Blob) || !take.blob.size) throw new Error('La nueva grabación está vacía.');
+  const db = await openDb();
+  const tx = db.transaction([PROJECTS_STORE, TAKES_STORE, META_STORE], 'readwrite');
+  const completed = transactionDone(tx);
+  const projectStore = tx.objectStore(PROJECTS_STORE);
+  const original = await requestValue(projectStore.get(projectId));
+  if (!original) {
+    tx.abort();
+    await completed.catch(() => {});
+    throw new Error('El proyecto no existe. La grabación anterior sigue guardada.');
+  }
+  const scenes = { ...(original.productionPlan?.scenes || {}) };
+  if (scenes[slideNumber]) scenes[slideNumber] = { ...scenes[slideNumber], ready: false };
+  const updatedProject = {
+    ...original,
+    productionPlan: { ...(original.productionPlan || {}), scenes },
+    updatedAt: Date.now(),
+  };
+  tx.objectStore(TAKES_STORE).put({
+    key: takeKey(projectId, slideNumber),
+    projectId,
+    slideNumber,
+    ...take,
+    accepted: true,
+    cleanedBlob: null,
+    cleanedDurationMs: null,
+    cleanedAt: null,
+    trimStart: 0,
+    trimEnd: null,
+    removedRanges: [],
+    updatedAt: Date.now(),
+  });
+  projectStore.put(updatedProject);
+  tx.objectStore(META_STORE).delete(pendingRetakeKey(projectId, slideNumber));
+  await completed;
+  return updatedProject;
 }
 
 export async function saveProject(project) {
@@ -241,6 +331,8 @@ export async function deleteProject(projectId) {
     ? (await requestValue(takeStore.index('by_project').getAll(projectId))) || []
     : ((await requestValue(takeStore.getAll())) || []).filter((take) => take.projectId === projectId);
   const active = await requestValue(readTx.objectStore(META_STORE).get(ACTIVE_PROJECT_KEY));
+  const pendingKeys = ((await requestValue(readTx.objectStore(META_STORE).getAllKeys())) || [])
+    .filter((key) => String(key).startsWith(`${PENDING_RETAKE_PREFIX}${projectId}:`));
   await transactionDone(readTx);
 
   const tx = db.transaction([PROJECTS_STORE, TAKES_STORE, META_STORE], 'readwrite');
@@ -248,6 +340,7 @@ export async function deleteProject(projectId) {
   const takes = tx.objectStore(TAKES_STORE);
   rows.forEach((row) => takes.delete(row.key));
   tx.objectStore(META_STORE).delete(templatePreferencesKey(projectId));
+  pendingKeys.forEach((key) => tx.objectStore(META_STORE).delete(key));
   if (active?.projectId === projectId) tx.objectStore(META_STORE).delete(ACTIVE_PROJECT_KEY);
   await transactionDone(tx);
 }
