@@ -17,3 +17,4 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 import './recording-layout.css';
 import './recording-focus.css';
 import './vibrant-theme.css';
+import './studio-identity.css';

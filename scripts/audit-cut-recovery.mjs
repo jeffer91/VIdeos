@@ -45,5 +45,10 @@ assert.match(app, /createAudioComparison\(cutTake.blob/, 'Comparison uses unmodi
 assert.match(app, /cut-preview-layout/, 'Cut editor must have the compact preview layout.');
 assert.match(vibrant, /grid-template-rows: clamp\(210px,32vh,295px\)/, 'The preview should not fill the screen.');
 assert.match(main, /import '\.\/vibrant-theme.css';/, 'Vibrant theme should load after previous CSS.');
-console.log('Mejoras de audio, previsualización y tema visual: OK');
+const identity = read('src/studio-identity.css');
+assert.match(identity, /\.production-app \.production-header/, 'New header theme should cover the whole application.');
+assert.match(identity, /\.recording-frame-tools/, 'Recording scale tools must have visible styling.');
+assert.match(app, /setRecordFit\('contain'\)/, 'The original video aspect ratio must be restorable.');
+assert.match(app, /setShowCutResult\(true\)/, 'The saved output must be previewable.');
+console.log('Mejoras de audio, video escalable, resultado y tema visual: OK');
 console.log('Auditoría de Corte, regrabación, recuperación y respaldos: OK');

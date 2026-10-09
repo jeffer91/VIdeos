@@ -1,0 +1,198 @@
+/* Videos Studio · unified identity system. Intentionally loaded AFTER existing themes. */
+:root {
+  --vs-bg: #e9effa;
+  --vs-surface: #fafdff;
+  --vs-surface-soft: #edf0ff;
+  --vs-surface-subtle: #f1f7ff;
+  --vs-border: #cbd6ec;
+  --vs-border-strong: #99afd5;
+  --vs-text: #172a49;
+  --vs-text-soft: #3e5277;
+  --vs-muted: #687c9c;
+  --vs-primary: #5949d5;
+  --vs-primary-hover: #4433bf;
+  --vs-primary-soft: #e4e1ff;
+  --vs-accent: #009f9b;
+  --vs-shadow: 0 9px 26px rgba(26,42,104,.1);
+}
+html,body,#root { background:#e9effa !important; }
+.production-app {
+  background:linear-gradient(155deg,#e8eefc,#f1f5fd 48%,#e4f4f3) !important;
+}
+.production-app .production-header {
+  background:linear-gradient(112deg,#142544 0%,#223b67 52%,#36488c 100%) !important;
+  border-bottom:2px solid #7263ed !important;
+  box-shadow:0 6px 24px rgba(11,32,73,.18) !important;
+}
+.production-app .production-header .production-brand strong,
+.production-app .production-header .production-progress strong,
+.production-app .production-header .production-brand span,
+.production-app .production-header .production-progress span {
+  color:#f6f8ff !important;
+}
+.production-app .production-nav button {
+  background:#29436e !important;
+  border:1px solid #48608c !important;
+  color:#e2e9fc !important;
+  box-shadow:none !important;
+}
+.production-app .production-nav button.active {
+  background:linear-gradient(120deg,#735bea,#4f5ee7) !important;
+  border-color:#b6a4ff !important; color:white !important;
+  box-shadow:0 4px 13px rgba(21,20,93,.26) !important;
+}
+.production-app .production-main {
+  background:radial-gradient(circle at 10% 12%,#dbdfff 0%,transparent 42%),
+              radial-gradient(circle at 87% 94%,#d1f2ed 0%,transparent 39%),
+              #e9effa !important;
+}
+.production-app .flow-heading {
+  padding:5px 10px 7px !important;
+  border-left:4px solid #6652df;
+  border-radius:6px;
+  background:linear-gradient(90deg,#e1e6ff,rgba(225,236,255,.15)) !important;
+}
+.production-app .flow-heading h1,
+.production-app .slide-flow-header h1 {color:#172b52 !important;}
+.production-app .production-card,
+.production-app .camera-production-card,
+.production-app .prompter-production-card,
+.production-app .source-card,
+.production-app .validation-card,
+.production-app .library-card,
+.production-app .result-card,
+.production-app .result-cards > div,
+.production-app .join-inspector,
+.production-app .cut-list {
+  background:linear-gradient(152deg,#ffffff,#f0f4ff) !important;
+  border-color:#c6d2ef !important;
+  box-shadow:0 5px 18px rgba(40,60,137,.075) !important;
+}
+.production-app .production-card,
+.production-app .camera-production-card,
+.production-app .prompter-production-card {
+  border-top:3px solid #9085ed !important;
+}
+.production-app .cut-list,
+.production-app .join-scene-list {
+  background:linear-gradient(180deg,#e4eaff,#ecf4ff) !important;
+}
+.production-app .cut-list button,
+.production-app .join-scene-list button,
+.production-app .slide-mini-rail button {
+  background:#fff !important;
+  border:1px solid #d0dafa !important;
+  color:#263b64 !important;
+}
+.production-app .cut-list button.active,
+.production-app .join-scene-list button.active,
+.production-app .slide-mini-rail button.current {
+  background:linear-gradient(100deg,#ddd8ff,#e3f5f3) !important;
+  border-color:#8071e9 !important; color:#302c87 !important;
+}
+.production-app .scope-switch button.active,
+.production-app .category-tabs button.active,
+.production-app .theme-switch button.active,
+.production-app .recording-view-switch button.active,
+.production-app .mode-switch button.active {
+  border-color:#7263df !important;
+  background:#e7e3ff !important;
+  color:#3b3199 !important;
+}
+.production-app .primary-button,
+.production-app .record-button,
+.production-app .accept-button {
+  background:linear-gradient(110deg,#4e57d5,#7553da) !important;
+  border-color:#685bdc !important;
+  color:white !important;
+  box-shadow:0 4px 13px rgba(81,73,178,.18) !important;
+}
+.production-app .secondary-button:hover:not(:disabled),
+.production-app button:not(:disabled):hover {
+  border-color:#9588e6 !important;
+}
+.production-app .cut-audio-panel {
+  background:linear-gradient(150deg,#eee9ff,#fafbff 58%,#dcf5f1) !important;
+  border:1px solid #aba6ed !important;
+  border-top:4px solid #7053e0 !important;
+}
+.production-app .cut-audio-toggle {background:#fff !important;}
+.production-app .cut-audio-preview-button,
+.production-app .cut-audio-choice button.active {
+  background:#def3f1 !important; color:#086864 !important;
+  border-color:#70cac1 !important;
+}
+.production-app .cut-audio-choice button.active {
+  background:#127f82 !important; color:#fff !important;
+}
+.production-app .recording-flow .camera-production-card {background:linear-gradient(160deg,#f5f5ff,#e7ebfa) !important;}
+.production-app .recording-flow .production-stage {
+  width:min(100%,840px) !important;
+  max-height:min(51vh,475px) !important;
+  aspect-ratio:16/9 !important;
+  border:2px solid #43527b !important;
+  border-radius:13px !important;
+  background:#111f38 !important;
+  box-shadow:0 12px 28px rgba(13,25,58,.16) !important;
+}
+.production-app .recording-flow[data-status='stopped'] .production-stage {
+  width:min(100%,800px) !important;
+  max-height:min(48vh,445px) !important;
+}
+.production-app .recording-flow .production-stage video,
+.production-app .recording-flow .production-stage .live-video {
+  object-fit:var(--preview-fit,contain) !important;
+  transform-origin:center center;
+  transition:transform .12s ease;
+}
+.production-app .recording-frame-tools {
+  display:flex; flex-wrap:wrap; align-items:center; justify-content:center;
+  gap:7px; padding:5px 8px; min-height:32px;
+  border:1px solid #c4cfef; border-radius:9px;
+  background:linear-gradient(100deg,#e7e7ff,#e4f6f4);
+  color:#2b3e67; font-size:11px;
+}
+.production-app .recording-frame-tools button {padding:4px 10px !important;min-height:27px;}
+.production-app .recording-frame-tools button.active {
+  color:#fff !important; background:#6352ca !important; border-color:#6352ca !important;
+}
+.production-app .recording-frame-tools label {
+  display:flex; gap:7px; align-items:center;
+  color:#2b3e67 !important; font-weight:600;
+}
+.production-app .recording-frame-tools input[type=range] {
+  width:100px; accent-color:#6455dc;
+}
+.production-app .recording-frame-tools small {color:#4b6490 !important;font-size:9px;}
+.production-app .cut-saved-preview-action {
+  background:#e3f5f1 !important;color:#076e68 !important;
+  border:1px solid #70c4b8 !important;min-height:28px;
+  border-radius:8px;padding:4px 10px;font-weight:750;
+}
+.cut-result-overlay {
+  position:fixed;inset:0;z-index:2400;
+  display:grid;place-items:center;
+  padding:20px;
+  background:rgba(10,21,42,.78);
+}
+.cut-result-dialog {
+  width:min(850px,95vw); max-height:90vh; overflow:auto;
+  display:grid;gap:10px;padding:14px;
+  background:#eef2fc; color:#172b4e;
+  border-radius:15px; border:2px solid #968ae8;
+  box-shadow:0 25px 70px rgba(0,0,0,.3);
+}
+.cut-result-dialog-header {display:flex;align-items:center;justify-content:space-between;}
+.cut-result-dialog-header strong {color:#172b4e !important;font-size:14px;}
+.cut-result-dialog button {border:1px solid #b6c4e8; border-radius:8px; padding:6px 12px; cursor:pointer;}
+.cut-result-dialog video {width:100%;max-height:62vh;background:#000;border-radius:10px;object-fit:contain;}
+.cut-result-dialog audio {width:100%;}
+.cut-result-dialog p {margin:0;color:#475b7f;font-size:11px;}
+@media(max-width:1200px) {
+ .production-app .recording-frame-tools small {display:none;}
+ .production-app .recording-flow .production-stage {width:min(100%,720px)!important;max-height:48vh!important;}
+}
+@media(max-height:760px) {
+ .production-app .recording-flow .production-stage {max-height:42vh!important;width:min(100%,680px)!important;}
+ .production-app .recording-frame-tools {padding:3px;gap:4px;}
+}
