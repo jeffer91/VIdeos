@@ -72,6 +72,15 @@ function assertTrustedIpc(event) {
 }
 
 function configureFFmpegCoreIpc() {
+  ipcMain.handle('ffmpeg:smoke-result', async (event, result) => {
+    assertTrustedIpc(event);
+    if (!process.argv.includes('--audio-smoke-test')) throw new Error('Esta operación está reservada para pruebas automatizadas.');
+    const ok = result?.success === true;
+    const report = JSON.stringify({ success: ok, ...(ok ? { details: result.details } : { error: result?.error || 'Sin detalles' }) }, null, 2);
+    await fs.writeFile(path.join(app.getPath('temp'), 'videos-studio-audio-smoke.log'), report, 'utf8');
+    app.exit(ok ? 0 : 1);
+    return ok;
+  });
   ipcMain.handle('ffmpeg:read-core-asset', async (event, name) => {
     assertTrustedIpc(event);
     if (!FFMPEG_CORE_ASSETS.has(name)) throw new Error('Archivo del motor de audio no permitido.');
@@ -532,7 +541,9 @@ async function createWindow() {
   });
 
   if (app.isPackaged) {
-    await mainWindow.loadFile(path.join(app.getAppPath(), 'dist', 'index.html'));
+    await mainWindow.loadFile(path.join(app.getAppPath(), 'dist', 'index.html'), process.argv.includes('--audio-smoke-test')
+      ? { query: { audio_smoke_test: '1' } }
+      : {});
   } else {
     await mainWindow.loadURL(rendererUrl);
   }

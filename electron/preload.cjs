@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('videosStudio', {
   },
   ffmpeg: {
     readCoreAsset: (name) => ipcRenderer.invoke('ffmpeg:read-core-asset', name),
+    reportSmokeTest: (result) => ipcRenderer.invoke('ffmpeg:smoke-result', result),
   },
   clipboard: {
     writeText: (text) => ipcRenderer.invoke('clipboard:write-text', text),

@@ -34,3 +34,8 @@ assert.ok(fsrc.includes("readBundled(name)"), 'Packaged Electron must have a sec
 assert.ok(preload.includes("ffmpeg:read-core-asset"), 'Preload bridge must expose FFmpeg assets.');
 assert.ok(main.includes("FFMPEG_CORE_ASSETS.has(name)"), 'IPC must allowlist asset names.');
 assert.ok(fsrc.includes("return 0;"), 'Successful FFmpeg filter execution must return success.');
+
+const smoke = read(new URL('../src/audioSmokeTest.js', import.meta.url), 'utf8');
+assert.ok(smoke.includes('await enhanceMediaAudio('));
+assert.ok(smoke.includes('await createAudioComparison('));
+assert.ok(smoke.includes('await cutMedia('));
