@@ -15,7 +15,7 @@ const LAUNCH_MODE_KEY = 'videosstudio:project-launch-mode';
 
 function isRecordingBusy() {
   return Boolean(document.querySelector(
-    '.status-countdown, .status-recording, .status-paused, .status-saving, .status-detecting, .rec-indicator',
+    '.status-countdown, .status-recording, .status-paused, .status-saving, .status-detecting, .rec-indicator, .production-app[data-accepting-take="true"]',
   ));
 }
 
@@ -96,7 +96,7 @@ export default function ProjectManager({ contentMode = 'football' }) {
 
   function guardRecording() {
     if (!isRecordingBusy()) return true;
-    setError('Finaliza o cancela la grabación actual antes de cambiar de proyecto.');
+    setError('Finaliza la grabación o espera a que termine de guardarse antes de cambiar de proyecto.');
     return false;
   }
 

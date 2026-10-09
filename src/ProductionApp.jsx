@@ -72,17 +72,19 @@ function formatBytes(bytes = 0) {
 }
 
 function useBlobUrl(blob) {
-  const [url, setUrl] = useState('');
+  const [entry, setEntry] = useState({ blob: null, url: '' });
   useEffect(() => {
     if (!blob) {
-      setUrl('');
+      setEntry({ blob: null, url: '' });
       return undefined;
     }
-    const next = URL.createObjectURL(blob);
-    setUrl(next);
-    return () => URL.revokeObjectURL(next);
+    const url = URL.createObjectURL(blob);
+    setEntry({ blob, url });
+    return () => URL.revokeObjectURL(url);
   }, [blob]);
-  return url;
+  // When switching slides, never show the previous slide's object URL
+  // while the new Blob URL is being created in an effect.
+  return entry.blob === blob ? entry.url : '';
 }
 
 function normalizeChoice(value) {
@@ -274,7 +276,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
   );
 
   const focusRecording = ['countdown', 'recording', 'paused'].includes(status);
-  const busyRecording = ['detecting', 'countdown', 'recording', 'paused', 'saving'].includes(status);
+  const busyRecording = ['detecting', 'countdown', 'recording', 'paused', 'saving'].includes(status) || acceptingTake;
 
   function cleanupAudioMeter() {
     if (meterFrameRef.current) cancelAnimationFrame(meterFrameRef.current);
@@ -1359,7 +1361,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     && missingAssetCount === 0;
 
   return (
-    <div className="production-app" data-recording-focus={focusRecording ? "true" : "false"}>
+    <div className="production-app" data-recording-focus={focusRecording ? "true" : "false"} data-accepting-take={acceptingTake ? "true" : "false"}>
       <header className="production-header">
         <div className="production-brand"><strong>Videos Studio</strong><span>{isCinema ? 'Cine · análisis de películas' : 'Fútbol · 11 Records'}</span></div>
         <nav className="production-nav">

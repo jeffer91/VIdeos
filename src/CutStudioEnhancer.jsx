@@ -176,6 +176,17 @@ export default function CutStudioEnhancer() {
   }, [target, basicMode]);
 
   useEffect(() => {
+    previewRef.current = false;
+    setPreviewing(false);
+    setSelection(null);
+    setCurrentTime(0);
+    setDuration(0);
+    setPeaks([]);
+    setSilences([]);
+    setWaveStatus('idle');
+  }, [src]);
+
+  useEffect(() => {
     if (!media) {
       setPlaying(false);
       setCurrentTime(0);
