@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import RecordingViewEnhancer, { FramingGuides } from './RecordingViewEnhancer';
 import { readPrompterPreference, waitForCountdown } from './recordingPreferences';
-import { cutMedia } from './ffmpeg';
+import { cutMedia, enhanceMediaAudio, createAudioComparison } from './ffmpeg';
+import { DEFAULT_AUDIO_EFFECTS, normalizeAudioEffects, hasAudioEffects } from './audioEffects';
 import { AI_MASTER_PROMPT, parseSlides } from './parser';
 import { CINEMA_MASTER_PROMPT } from './cinemaPrompt';
 import {
@@ -217,6 +218,11 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
   const [rangeEnd, setRangeEnd] = useState(0);
   const [cutting, setCutting] = useState(false);
   const [cutProgress, setCutProgress] = useState(0);
+  const [audioEffects, setAudioEffects] = useState(DEFAULT_AUDIO_EFFECTS);
+  const [audioPreviewBusy, setAudioPreviewBusy] = useState(false);
+  const [audioComparison, setAudioComparison] = useState(null);
+  const [audioPreviewChoice, setAudioPreviewChoice] = useState('improved');
+  const [audioPreviewError, setAudioPreviewError] = useState('');
 
   const [libraryScope, setLibraryScope] = useState('global');
   const [libraryCategory, setLibraryCategory] = useState('intros');
@@ -254,8 +260,11 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
 
   const cutSlide = project?.slides?.[cutSlideIndex] || null;
   const cutTake = cutSlide ? takes[cutSlide.number] : null;
-  const cutBlob = cutTake?.cleanedBlob || cutTake?.blob || null;
+  // Always edit the original, never apply destructive effects a second time.
+  const cutBlob = cutTake?.blob || null;
   const cutUrl = useBlobUrl(cutBlob);
+  const originalSampleUrl = useBlobUrl(audioComparison?.original || null);
+  const improvedSampleUrl = useBlobUrl(audioComparison?.improved || null);
 
   const joinSlide = project?.slides?.[joinSlideIndex] || null;
   const joinTake = joinSlide ? takes[joinSlide.number] : null;
@@ -586,6 +595,9 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     setTrimStart(start);
     setTrimEnd(end);
     setRemovedRanges(cutTake.removedRanges || []);
+    setAudioEffects(normalizeAudioEffects(cutTake.audioEffects));
+    setAudioComparison(null);
+    setAudioPreviewError('');
     setRangeStart(start);
     setRangeEnd(Math.min(end, start + 1));
   }, [cutSlideIndex, cutTake?.updatedAt]);
@@ -1012,6 +1024,33 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     }
   }
 
+  function toggleAudioEffect(key) {
+    if (cutting || audioPreviewBusy) return;
+    setAudioEffects((previous) => ({ ...previous, [key]: !previous[key] }));
+    setAudioComparison(null);
+    setAudioPreviewError('');
+  }
+
+  async function compareAudioEffects() {
+    if (!cutTake?.blob || cutting || audioPreviewBusy || !hasAudioEffects(audioEffects)) return;
+    const fullSeconds = Math.max(0.1, (cutTake.durationMs || 0) / 1000);
+    const start = Math.min(Math.max(0, Number(trimStart) || 0), Math.max(0, fullSeconds - 0.3));
+    const duration = Math.min(10, Math.max(0.3, (Number(trimEnd) || fullSeconds) - start));
+    setAudioPreviewBusy(true);
+    setAudioPreviewError('');
+    setAudioComparison(null);
+    try {
+      const samples = await createAudioComparison(cutTake.blob, start, duration, audioEffects);
+      setAudioComparison(samples);
+      setAudioPreviewChoice('improved');
+    } catch (caught) {
+      console.error('No se pudo comparar el audio:', caught);
+      setAudioPreviewError(caught?.message || 'No se pudo crear la muestra de audio.');
+    } finally {
+      setAudioPreviewBusy(false);
+    }
+  }
+
   function addInternalCut() {
     const start = Number(rangeStart);
     const end = Number(rangeEnd);
@@ -1028,7 +1067,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
   }
 
   async function applyCut() {
-    if (!project || !cutSlide || !cutTake?.blob || cutting) return;
+    if (!project || !cutSlide || !cutTake?.blob || cutting || audioPreviewBusy) return;
     const fullDuration = Math.max(0.1, (cutTake.durationMs || 0) / 1000);
     const start = Math.max(0, Number(trimStart) || 0);
     const end = Math.min(fullDuration, Math.max(start + 0.05, Number(trimEnd) || fullDuration));
@@ -1044,12 +1083,16 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     setError('');
     try {
       const unchanged = start <= 0.01 && Math.abs(end - fullDuration) <= 0.05 && !ranges.length;
+      const effects = normalizeAudioEffects(audioEffects);
       const cleanedBlob = unchanged
-        ? cutTake.blob
-        : await cutMedia(cutTake.blob, cutTake.mode || 'video', start, end, ranges, setCutProgress);
+        ? (hasAudioEffects(effects)
+          ? await enhanceMediaAudio(cutTake.blob, cutTake.mode || 'video', effects, setCutProgress)
+          : cutTake.blob)
+        : await cutMedia(cutTake.blob, cutTake.mode || 'video', start, end, ranges, setCutProgress, effects);
       const nextTake = {
         ...cutTake,
         cleanedBlob,
+        audioEffects: effects,
         trimStart: start,
         trimEnd: end,
         removedRanges: ranges,
@@ -1181,6 +1224,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
       return 'Recupera o descarta la grabación interrumpida antes de salir de Grabación.';
     }
     if (acceptingTake) return 'Espera a que se termine de guardar la grabación.';
+    if (cutting || audioPreviewBusy) return 'Espera a que termine el procesamiento del corte o del audio.';
     return '';
   }
 
@@ -1207,7 +1251,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     };
     window.addEventListener('videosstudio:navigate', handleNavigationRequest);
     return () => window.removeEventListener('videosstudio:navigate', handleNavigationRequest);
-  }, [view, status, recoveryMeta, pendingRetake, acceptingTake]);
+  }, [view, status, recoveryMeta, pendingRetake, acceptingTake, cutting, audioPreviewBusy]);
 
   function invalidateScene(scenes, slideNumber) {
     const next = { ...(scenes || {}) };
@@ -1361,7 +1405,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     && missingAssetCount === 0;
 
   return (
-    <div className="production-app" data-recording-focus={focusRecording ? "true" : "false"} data-accepting-take={acceptingTake ? "true" : "false"}>
+    <div className="production-app" data-recording-focus={focusRecording ? "true" : "false"} data-accepting-take={acceptingTake ? "true" : "false"} data-processing-audio={audioPreviewBusy || cutting ? "true" : "false"}>
       <header className="production-header">
         <div className="production-brand"><strong>Videos Studio</strong><span>{isCinema ? 'Cine · análisis de películas' : 'Fútbol · 11 Records'}</span></div>
         <nav className="production-nav">
@@ -1422,10 +1466,23 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
 
         {view === 'cut' && project && (
           <section className="flow-screen cut-flow">
-            <div className="flow-heading"><div><span className="eyebrow">3 · CORTE</span><h1>Limpiar cada grabación</h1><p>Recorta inicio/final y elimina silencios o errores internos.</p></div><div className="cut-heading-actions"><button type="button" className="secondary-button" onClick={rerecordSelectedCut} disabled={!cutTake?.accepted || cutting}>↺ Regrabar diapositiva {cutSlide?.number || ''}</button><span className="flow-counter">{cleanedCount}/{project.slides.length} limpias</span></div></div>
+            <div className="flow-heading"><div><span className="eyebrow">3 · CORTE</span><h1>Limpiar cada grabación</h1><p>Recorta inicio/final y elimina silencios o errores internos.</p></div><div className="cut-heading-actions"><button type="button" className="secondary-button" onClick={rerecordSelectedCut} disabled={!cutTake?.accepted || cutting || audioPreviewBusy}>↺ Regrabar diapositiva {cutSlide?.number || ''}</button><span className="flow-counter">{cleanedCount}/{project.slides.length} limpias</span></div></div>
             <div className="cut-grid">
-              <div className="production-card cut-list">{project.slides.map((slide, index) => { const take = takes[slide.number]; return <button key={slide.number} className={`${index === cutSlideIndex ? 'active' : ''} ${take?.cleanedBlob ? 'done' : ''}`} onClick={() => setCutSlideIndex(index)} disabled={!take?.accepted}><span>{String(slide.number).padStart(2, '0')}</span><div><strong>{slide.title}</strong><small>{!take?.accepted ? 'Falta grabación aceptada' : take?.cleanedBlob ? '✓ Limpia' : 'Pendiente de corte'}</small></div></button>; })}</div>
-              <div className="production-card cut-editor">{cutTake?.accepted ? <><div className="cut-video">{cutTake.mode === 'audio' ? <audio src={cutUrl} data-blob-size={cutBlob?.size || 0} controls /> : <video src={cutUrl} data-blob-size={cutBlob?.size || 0} controls playsInline />}</div><div className="trim-controls"><label><span>Inicio</span><input type="number" min="0" step="0.1" value={trimStart} onChange={(event) => setTrimStart(Number(event.target.value))} /></label><div className="trim-track"><div /><span>{formatTime(cutTake.durationMs || 0)}</span></div><label><span>Final</span><input type="number" min="0.1" step="0.1" value={trimEnd} onChange={(event) => setTrimEnd(Number(event.target.value))} /></label></div><div className="internal-cut-editor"><strong>Cortes internos</strong><div className="internal-cut-inputs"><label><span>Desde</span><input type="number" min={trimStart} step="0.1" value={rangeStart} onChange={(event) => setRangeStart(Number(event.target.value))} /></label><label><span>Hasta</span><input type="number" min={trimStart} step="0.1" value={rangeEnd} onChange={(event) => setRangeEnd(Number(event.target.value))} /></label><button className="secondary-button" onClick={addInternalCut}>Eliminar tramo</button></div><div className="cut-range-list">{removedRanges.length ? removedRanges.map((range, index) => <span key={`${range.start}-${range.end}-${index}`}>{range.start.toFixed(1)}–{range.end.toFixed(1)} s <button onClick={() => setRemovedRanges((old) => old.filter((_item, i) => i !== index))}>×</button></span>) : <small>Sin cortes internos.</small>}</div></div><div className="cut-summary"><span>Original: {formatTime(cutTake.durationMs)}</span><span>Salida estimada: {formatTime(cleanedDurationSeconds(Number(trimStart) || 0, Number(trimEnd) || 0, removedRanges) * 1000)}</span><span>{cutTake.cleanedBlob ? `Limpia: ${formatBytes(cutTake.cleanedBlob.size)}` : 'Sin versión limpia'}</span></div><button className="primary-button" onClick={applyCut} disabled={cutting}>{cutting ? `Procesando ${Math.round(cutProgress * 100)}%` : 'Guardar corte limpio'}</button></> : <div className="empty-state">Selecciona una diapositiva grabada y aceptada.</div>}</div>
+              <div className="production-card cut-list">{project.slides.map((slide, index) => { const take = takes[slide.number]; return <button key={slide.number} className={`${index === cutSlideIndex ? 'active' : ''} ${take?.cleanedBlob ? 'done' : ''}`} onClick={() => setCutSlideIndex(index)} disabled={!take?.accepted || cutting || audioPreviewBusy}><span>{String(slide.number).padStart(2, '0')}</span><div><strong>{slide.title}</strong><small>{!take?.accepted ? 'Falta grabación aceptada' : take?.cleanedBlob ? '✓ Limpia' : 'Pendiente de corte'}</small></div></button>; })}</div>
+              <div className="production-card cut-editor">{cutTake?.accepted ? <><div className="cut-preview-layout">
+  <div className="cut-video">{cutTake.mode === 'audio' ? <audio src={cutUrl} data-blob-size={cutBlob?.size || 0} controls /> : <video src={cutUrl} data-blob-size={cutBlob?.size || 0} controls playsInline />}</div>
+  <aside className="cut-audio-panel" aria-label="Mejoras de audio">
+    <div className="cut-audio-heading"><span className="cut-audio-icon">♫</span><div><strong>MEJORAS DE AUDIO</strong><small>Efectos de esta diapositiva</small></div></div>
+    <label className="cut-audio-toggle"><span><strong>Reducir ruido</strong><small>Ruido de ventilación o ambiente</small></span><input type="checkbox" checked={audioEffects.noiseReduction} onChange={() => toggleAudioEffect('noiseReduction')} disabled={cutting || audioPreviewBusy} /><i aria-hidden="true" /></label>
+    <label className="cut-audio-toggle"><span><strong>Mejorar voz</strong><small>Claridad y volumen equilibrado</small></span><input type="checkbox" checked={audioEffects.voiceEnhancement} onChange={() => toggleAudioEffect('voiceEnhancement')} disabled={cutting || audioPreviewBusy} /><i aria-hidden="true" /></label>
+    <div className="cut-audio-compare">
+      <button type="button" className="cut-audio-preview-button" disabled={!hasAudioEffects(audioEffects) || audioPreviewBusy || cutting} onClick={compareAudioEffects}>{audioPreviewBusy ? 'Procesando muestra…' : '♫ Comparar 10 segundos'}</button>
+      {audioComparison && <><div className="cut-audio-choice"><button type="button" className={audioPreviewChoice === 'original' ? 'active' : ''} onClick={() => setAudioPreviewChoice('original')}>Original</button><button type="button" className={audioPreviewChoice === 'improved' ? 'active' : ''} onClick={() => setAudioPreviewChoice('improved')}>Mejorado</button></div><audio key={audioPreviewChoice} aria-label={audioPreviewChoice === 'original' ? 'Audio original' : 'Audio mejorado'} controls preload="metadata" src={audioPreviewChoice === 'original' ? originalSampleUrl : improvedSampleUrl} /></>}
+      {audioPreviewError && <small className="cut-audio-error" role="alert">{audioPreviewError}</small>}
+    </div>
+    <small className="cut-audio-footnote">{hasAudioEffects(audioEffects) ? 'Guarda el corte para aplicar los efectos. El original no se modifica.' : 'Sin efectos: sonido original.'}</small>
+  </aside>
+</div><div className="trim-controls"><label><span>Inicio</span><input type="number" min="0" step="0.1" value={trimStart} onChange={(event) => setTrimStart(Number(event.target.value))} /></label><div className="trim-track"><div /><span>{formatTime(cutTake.durationMs || 0)}</span></div><label><span>Final</span><input type="number" min="0.1" step="0.1" value={trimEnd} onChange={(event) => setTrimEnd(Number(event.target.value))} /></label></div><div className="internal-cut-editor"><strong>Cortes internos</strong><div className="internal-cut-inputs"><label><span>Desde</span><input type="number" min={trimStart} step="0.1" value={rangeStart} onChange={(event) => setRangeStart(Number(event.target.value))} /></label><label><span>Hasta</span><input type="number" min={trimStart} step="0.1" value={rangeEnd} onChange={(event) => setRangeEnd(Number(event.target.value))} /></label><button className="secondary-button" onClick={addInternalCut}>Eliminar tramo</button></div><div className="cut-range-list">{removedRanges.length ? removedRanges.map((range, index) => <span key={`${range.start}-${range.end}-${index}`}>{range.start.toFixed(1)}–{range.end.toFixed(1)} s <button onClick={() => setRemovedRanges((old) => old.filter((_item, i) => i !== index))}>×</button></span>) : <small>Sin cortes internos.</small>}</div></div><div className="cut-summary"><span>Original: {formatTime(cutTake.durationMs)}</span><span>Salida estimada: {formatTime(cleanedDurationSeconds(Number(trimStart) || 0, Number(trimEnd) || 0, removedRanges) * 1000)}</span><span>{cutTake.cleanedBlob ? `Limpia: ${formatBytes(cutTake.cleanedBlob.size)}` : 'Sin versión limpia'}</span></div><button className="primary-button" onClick={applyCut} disabled={cutting || audioPreviewBusy}>{cutting ? `Procesando ${Math.round(cutProgress * 100)}%` : 'Guardar corte limpio'}</button></> : <div className="empty-state">Selecciona una diapositiva grabada y aceptada.</div>}</div>
             </div>
           </section>
         )}
