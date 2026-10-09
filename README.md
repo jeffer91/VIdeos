@@ -10,7 +10,7 @@ Aplicación de escritorio local con Electron + React + Vite para producir videos
 4. **Biblioteca**: almacena videos reutilizables en una Biblioteca Global o en la Biblioteca del Proyecto: Intros, Transiciones, Endings, CTA y Video memes.
 5. **Unión**: prepara cada escena con video limpio, datos y visual. Permite elegir tema, intro, ending, CTA y transiciones.
 6. **Video memes**: programa un meme dentro de una escena. El video principal se pausa, queda desenfocado, se reproduce el meme y después continúa desde el mismo punto.
-7. **Resultado**: audita grabaciones, cortes, escenas, CTA, memes y recursos antes del futuro render final.
+7. **Resultado**: audita grabaciones, cortes, escenas, CTA, memes y recursos, compone un MP4 final y permite descargarlo.
 
 ## Prompt IA
 
@@ -77,12 +77,16 @@ npm install
 npm start
 ```
 
-Para actualizar una copia ya instalada en desarrollo:
+Para actualizar la copia de desarrollo local, después de que se publiquen los cambios en `main`:
 
 ```bash
 git pull origin main
 npm start
 ```
+
+`npm start` verifica dependencias y, si faltan, ejecuta `npm install`. También copia automáticamente `ffmpeg-core.js` y `ffmpeg-core.wasm` desde el paquete instalado. No hace falta descargar FFmpeg desde sitios externos ni copiar archivos manualmente. Si alguna dependencia no se puede reparar, ejecuta `npm ci --include=optional` y vuelve a iniciar.
+
+**Grabaciones:** los videos del proyecto se guardan en IndexedDB en el equipo. Ni `git pull` ni el proceso de compilación descargan, mueven o sustituyen esas grabaciones. Crea un respaldo desde la propia aplicación antes de realizar cambios importantes.
 
 ## Auditoría automática
 

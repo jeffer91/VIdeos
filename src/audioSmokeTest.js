@@ -1,4 +1,6 @@
 import { cutMedia, enhanceMediaAudio, createAudioComparison } from './ffmpeg';
+import { verifyProductionRendererCore } from './productionRenderer';
+import { verifyFinalRendererCore } from './finalRenderer';
 
 function syntheticWav() {
   const rate = 16000;
@@ -97,7 +99,9 @@ export async function runAudioSmokeTest() {
   if (enhancedVideo.size < 1500 || enhancedVideo.type !== 'video/mp4') {
     throw new Error('La mejora de voz no generó un video MP4 válido.');
   }
-  return { improved: improved.size, originalSample: sample.original.size,
+  await verifyProductionRendererCore();
+  await verifyFinalRendererCore();
+  return { rendererCores: 'production + final', improved: improved.size, originalSample: sample.original.size,
     enhancedSample: sample.improved.size, cut: cut.size,
     sourceVideo: originalVideo.size, improvedVideo: enhancedVideo.size };
 }

@@ -1,5 +1,6 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
+import { loadFFmpegCore } from './ffmpegCoreAssets';
 
 let ffmpegInstance = null;
 let loadPromise = null;
@@ -18,20 +19,26 @@ async function getFFmpeg() {
         });
         progressListenerBound = true;
       }
-      const base = `${import.meta.env.BASE_URL}ffmpeg/`;
-      await ffmpegInstance.load({
-        coreURL: `${base}ffmpeg-core.js`,
-        wasmURL: `${base}ffmpeg-core.wasm`,
-      });
+      await loadFFmpegCore(ffmpegInstance);
       return ffmpegInstance;
     })();
   }
 
   try {
     return await loadPromise;
+  } catch (caught) {
+    ffmpegInstance = null;
+    progressListenerBound = false;
+    throw caught;
   } finally {
     loadPromise = null;
   }
+}
+
+export async function verifyFinalRendererCore() {
+  const ffmpeg = await getFFmpeg();
+  if (await ffmpeg.exec(['-version']) !== 0) throw new Error('El renderizador final no pudo ejecutar FFmpeg.');
+  return true;
 }
 
 async function safeDelete(ffmpeg, name) {

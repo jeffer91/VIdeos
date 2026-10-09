@@ -39,3 +39,16 @@ const smoke = read(new URL('../src/audioSmokeTest.js', import.meta.url), 'utf8')
 assert.ok(smoke.includes('await enhanceMediaAudio('));
 assert.ok(smoke.includes('await createAudioComparison('));
 assert.ok(smoke.includes('await cutMedia('));
+
+// The video renderers must never import FFmpeg assets directly from /public.
+const coreLoader = read(new URL('../src/ffmpegCoreAssets.js', import.meta.url), 'utf8');
+const production = read(new URL('../src/productionRenderer.js', import.meta.url), 'utf8');
+const final = read(new URL('../src/finalRenderer.js', import.meta.url), 'utf8');
+assert.ok(coreLoader.includes('toBlobURL('), 'El núcleo FFmpeg debe convertirse a URL Blob.');
+assert.ok(coreLoader.includes('readBundled(name)'), 'La versión instalada debe usar el fallback seguro.');
+for (const [name, source] of [['Unión', production], ['Resultado', final]]) {
+  assert.ok(source.includes('await loadFFmpegCore(ffmpegInstance)'), `${name} debe cargar FFmpeg con rutas correctas.`);
+  assert.ok(!source.includes('wasmURL: `${base}ffmpeg-core.wasm`'), `${name} no debe usar rutas directas de /public.`);
+}
+assert.ok(smoke.includes('await verifyProductionRendererCore()'), 'La prueba Windows debe cargar el compositor.');
+assert.ok(smoke.includes('await verifyFinalRendererCore()'), 'La prueba Windows debe cargar el renderizador final.');
