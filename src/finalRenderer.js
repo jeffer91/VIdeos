@@ -1,6 +1,7 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
 import { loadFFmpegCore } from './ffmpegCoreAssets';
+import { withEngineFallback } from './engineFallback';
 
 let ffmpegInstance = null;
 let loadPromise = null;
@@ -69,13 +70,13 @@ export function finalVideoFilename(project) {
   return `11-records-${sanitizeTitle(project?.name || 'video')}.mp4`;
 }
 
-export async function renderCleanSceneSequence(sceneBlobs = [], onProgress) {
+async function renderCleanSceneSequenceCore(sceneBlobs, onProgress, ffmpeg, method) {
+  if (method === 'native') ffmpeg.on('progress', ({ progress }) => activeProgress?.(progress));
   if (!sceneBlobs.length) throw new Error('No hay escenas limpias para renderizar.');
   if (sceneBlobs.some((blob) => !(blob instanceof Blob) || !blob.size)) {
     throw new Error('Una o más escenas no contienen video válido.');
   }
 
-  const ffmpeg = await getFFmpeg();
   const stamp = Date.now();
   const segmentNames = [];
   const tempNames = [];
@@ -156,4 +157,15 @@ export async function renderCleanSceneSequence(sceneBlobs = [], onProgress) {
     activeProgress = null;
     for (const name of tempNames) await safeDelete(ffmpeg, name);
   }
+}
+
+export async function renderCleanSceneSequence(sceneBlobs = [], onProgress, options = {}) {
+  const outcome = await withEngineFallback(
+    (engine, method) => renderCleanSceneSequenceCore(sceneBlobs, onProgress, engine, method),
+    getFFmpeg,
+    { ...options, onWasmTerminated: (engine) => {
+      if (ffmpegInstance === engine) { ffmpegInstance = null; progressListenerBound = false; loadPromise = null; }
+    } },
+  );
+  return outcome.result;
 }

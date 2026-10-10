@@ -11,7 +11,7 @@ const MAX_SESSIONS = 4;
 const MAX_FILE_BYTES = 1024 * 1024 * 1024;
 const SAFE_NAME = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,160}$/;
 const ALLOWED_ARGS = new Set([
-  '-i','-ss','-to','-t','-map','-c:v','-c:a','-codec:v','-codec:a',
+  '-i','-ss','-to','-t','-map','-c','-c:v','-c:a','-codec:v','-codec:a',
   '-b:a','-b:v','-vf','-af','-filter_complex','-filter:v','-filter:a',
   '-preset','-crf','-pix_fmt','-movflags','-vn','-an','-ar','-ac',
   '-frames:v','-loop','-shortest','-f','-safe','-filter_threads',
