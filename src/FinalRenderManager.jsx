@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   getActiveProject,
@@ -9,6 +9,9 @@ import {
 import { getVisualSettings, listVisualAssets } from './visualStore';
 import { finalVideoFilename } from './finalRenderer';
 import { renderProductionVideo } from './productionRenderer';
+import { readProcessingPreferences, saveProcessingPreferences } from './processingPreferences';
+import ProcessingOptionsPanel from './ProcessingOptionsPanel';
+import './processing-options.css';
 import './final-render.css';
 
 const INHERIT = '__inherit__';
@@ -44,6 +47,18 @@ export default function FinalRenderManager() {
   const [takes, setTakes] = useState({});
   const [defaults, setDefaults] = useState({});
   const [rendering, setRendering] = useState(false);
+  const [processOptions, setProcessOptions] = useState(readProcessingPreferences);
+  const [engineState, setEngineState] = useState({ phase: 'idle', method: '', progress: null, diagnostics: [] });
+  const [elapsed, setElapsed] = useState(0);
+  const [renderStarted, setRenderStarted] = useState(0);
+  const renderControllerRef = useRef(null);
+  useEffect(() => {
+    if (!renderStarted) return undefined;
+    const tick = () => setElapsed(Math.floor((Date.now() - renderStarted) / 1000));
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [renderStarted]);
   const [renderState, setRenderState] = useState({ progress: 0, phase: 'idle', detail: '' });
   const [output, setOutput] = useState(null);
   const [outputUrl, setOutputUrl] = useState('');
@@ -176,6 +191,14 @@ export default function FinalRenderManager() {
     };
   }
 
+  function updateEngineOptions(value) {
+    setProcessOptions(saveProcessingPreferences(value));
+  }
+  function cancelRendering() {
+    renderControllerRef.current?.abort();
+    setEngineState((old) => ({ ...old, phase: 'cancelling' }));
+  }
+
   async function renderFinalMp4() {
     if (!project || rendering) return;
     setError('');
@@ -194,17 +217,30 @@ export default function FinalRenderManager() {
       return;
     }
 
+    const controller = new AbortController();
+    renderControllerRef.current = controller;
+    setEngineState({ phase: 'loading', method: '', progress: null, diagnostics: [] });
+    setRenderStarted(Date.now());
+    setElapsed(0);
     setRendering(true);
     setRenderState({ progress: 0, phase: 'loading', detail: 'Preparando proyecto' });
     try {
       const plan = await buildRenderPlan();
-      const blob = await renderProductionVideo(plan, setRenderState);
+      const blob = await renderProductionVideo(plan, setRenderState, {
+        ...processOptions,
+        signal: controller.signal,
+        onStatus: setEngineState,
+      });
+      if (controller.signal.aborted) throw new Error('Procesamiento cancelado por el usuario.');
+      if (!(blob instanceof Blob) || !blob.size) throw new Error('La exportación produjo un archivo vacío.');
       setOutput(blob);
       setRenderState({ progress: 1, phase: 'done', detail: 'MP4 final listo' });
     } catch (caught) {
       console.error(caught);
       setError(caught?.message || 'No se pudo generar el MP4 final.');
     } finally {
+      if (renderControllerRef.current === controller) renderControllerRef.current = null;
+      setRenderStarted(0);
       setRendering(false);
     }
   }
@@ -254,6 +290,8 @@ export default function FinalRenderManager() {
         </button>
       </div>
 
+      <ProcessingOptionsPanel options={processOptions} onChange={updateEngineOptions} busy={rendering}
+        state={engineState} elapsed={elapsed} progress={renderState.progress} onCancel={cancelRendering} />
       <div className="final-render-status">
         <span className={readiness.missingClean.length ? 'warn' : 'ok'}>{readiness.slides.length - readiness.missingClean.length}/{readiness.slides.length} videos limpios</span>
         <span className={readiness.unmounted.length ? 'warn' : 'ok'}>{readiness.slides.length - readiness.unmounted.length}/{readiness.slides.length} escenas revisadas</span>
