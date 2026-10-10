@@ -41,6 +41,7 @@ function validateArgs(args) {
        || /(?:movie|amovie|zmq|azmq|sendcmd)\s*=/.test(item)) {
       throw new Error('Protocolo o ruta externa no autorizada.');
     }
+    if (item.includes('../') || item.includes('..\\')) throw new Error('No se permiten rutas fuera del directorio temporal.');
     if (item.startsWith('-') && !ALLOWED_ARGS.has(item) && !/^-?\d+(?:\.\d+)?$/.test(item)) {
       // Values may start with minus (numeric expressions or -1).
       if (!/^-[\d.]/.test(item)) throw new Error('Parámetro FFmpeg no autorizado: ' + item.slice(0, 40));

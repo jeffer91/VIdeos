@@ -317,7 +317,6 @@ async function enhanceMediaAudioCore(blob, mode, effects, onProgress, ffmpeg) {
   const stamp = outputNameFor('audio');
   const inputName = `${stamp}-input.${extensionFromMime(blob.type)}`;
   const outputName = mode === 'audio' ? `${stamp}-output.m4a` : `${stamp}-output.mp4`;
-  ffmpeg.setExpectedDuration?.(mode === 'audio' ? 0 : 0);
   progressCallback = onProgress || null;
   progressCallback?.(0);
   try {

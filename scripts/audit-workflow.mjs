@@ -259,9 +259,13 @@ assert(uxEnhancements.includes('.visual-drawer'), 'Debe existir un panel dedicad
 assert(uxBridge.includes('.workflow-done'), 'Los montajes confirmados externamente deben reflejarse visualmente.');
 
 const channels = [...preload.matchAll(/ipcRenderer\.invoke\('([^']+)'/g)].map((match) => match[1]);
+const nativeModule = await read('electron/native-ffmpeg.cjs');
 assert(channels.length > 0, 'Preload debe exponer canales IPC.');
 for (const channel of channels) {
-  assert(mainProcess.includes(`ipcMain.handle('${channel}'`), `Falta el handler IPC ${channel} en electron/main.cjs.`);
+  assert(mainProcess.includes(`ipcMain.handle('${channel}'`) || (
+    mainProcess.includes('registerNativeFFmpegIpc(assertTrustedIpc)')
+    && nativeModule.includes(`ipcMain.handle('${channel}'`)
+  ), `Falta el handler IPC ${channel} en los módulos del proceso principal.`);
 }
 
 assert(gitignore.split(/\r?\n/).some((line) => line.trim() === 'library/'), 'La carpeta library/ debe estar ignorada por Git para evitar subir videos o fondos locales.');
