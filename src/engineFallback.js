@@ -21,6 +21,7 @@ export async function withEngineFallback(action, createWasm, options = {}) {
     }
     let engine;
     let cancel;
+    let progressListener;
     try {
       options.onStatus?.({ phase: 'loading', method, progress: null, diagnostics: [...diagnostics] });
       engine = method === 'native' ? await new NativeFFmpeg().load() : await createWasm();
@@ -33,11 +34,12 @@ export async function withEngineFallback(action, createWasm, options = {}) {
         }
       };
       options.signal?.addEventListener('abort', cancel, { once: true });
-      engine.on('progress', ({ progress }) => {
+      progressListener = ({ progress }) => {
         if (!options.signal?.aborted && Number.isFinite(progress)) {
           options.onProgress?.(Math.max(0, Math.min(.99, Number(progress))));
         }
-      });
+      };
+      engine.on('progress', progressListener);
       options.onStatus?.({ phase: 'processing', method, progress: 0, diagnostics: [...diagnostics] });
       const result = await action(engine, method);
       if (options.signal?.aborted) throw new Error('Procesamiento cancelado por el usuario.');
@@ -51,6 +53,7 @@ export async function withEngineFallback(action, createWasm, options = {}) {
       options.onStatus?.({ phase: 'failed', method, progress: null, diagnostics: [...diagnostics] });
     } finally {
       if (cancel && options.signal) options.signal.removeEventListener('abort', cancel);
+      if (progressListener) engine?.off?.('progress', progressListener);
       if (method === 'native') await engine?.close?.();
     }
   }

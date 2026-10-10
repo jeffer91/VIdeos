@@ -1,6 +1,7 @@
 import { cutMedia, enhanceMediaAudio, createAudioComparison } from './ffmpeg';
 import { verifyProductionRendererCore } from './productionRenderer';
 import { verifyFinalRendererCore } from './finalRenderer';
+import { withEngineFallback } from './engineFallback';
 
 function syntheticWav() {
   const rate = 16000;
@@ -85,6 +86,24 @@ async function syntheticWebM() {
 export async function runAudioSmokeTest() {
   const source = syntheticWav();
   const combined = { noiseReduction: true, voiceEnhancement: true };
+  // Both independent backends must be exercised, not only auto-fallback.
+  const nativeCheck = await window.videosStudio.nativeFFmpeg.status();
+  if (!nativeCheck?.available) throw new Error('El instalador no contiene FFmpeg nativo.');
+  const nativeAudio = await enhanceMediaAudio(source, 'audio', combined, null, { method: 'native', fallback: false });
+  if (!nativeAudio?.size) throw new Error('FFmpeg nativo no generó audio.');
+  const wasmAudio = await enhanceMediaAudio(source, 'audio', { noiseReduction: true }, null, { method: 'wasm', fallback: false });
+  if (!wasmAudio?.size) throw new Error('FFmpeg WebAssembly no generó audio.');
+  const fallbackResult = await withEngineFallback(
+    async (_engine, method) => {
+      if (method === 'native') throw new Error('Fallo simulado del motor principal');
+      return 'respaldo-validado';
+    },
+    async () => ({ on: () => {}, off: () => {} }),
+    { method: 'native', fallback: true },
+  );
+  if (fallbackResult.result !== 'respaldo-validado' || fallbackResult.method !== 'wasm') {
+    throw new Error('No se activó el motor de respaldo después del fallo.');
+  }
   const improved = await enhanceMediaAudio(source, 'audio', combined);
   if (!improved || improved.size < 1000) throw new Error('FFmpeg no produjo el archivo de audio mejorado.');
   const sample = await createAudioComparison(source, 0.1, 0.6, combined);
@@ -101,7 +120,8 @@ export async function runAudioSmokeTest() {
   }
   await verifyProductionRendererCore();
   await verifyFinalRendererCore();
-  return { rendererCores: 'production + final', improved: improved.size, originalSample: sample.original.size,
+  return { rendererCores: 'production + final', nativeAudio: nativeAudio.size, wasmAudio: wasmAudio.size,
+    fallback: fallbackResult.method, improved: improved.size, originalSample: sample.original.size,
     enhancedSample: sample.improved.size, cut: cut.size,
     sourceVideo: originalVideo.size, improvedVideo: enhancedVideo.size };
 }

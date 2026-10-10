@@ -11,6 +11,10 @@ export class NativeFFmpeg {
     if (this.listeners[event] && typeof handler === 'function') this.listeners[event].add(handler);
     return this;
   }
+  off(event, handler) {
+    this.listeners[event]?.delete(handler);
+    return this;
+  }
   async load() {
     const api = window.videosStudio?.nativeFFmpeg;
     if (!api) throw new Error('El motor nativo requiere Videos Studio para Windows.');
