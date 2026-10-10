@@ -55,16 +55,16 @@ assert.ok(smoke.includes('await verifyFinalRendererCore()'), 'La prueba Windows 
 
 const native = read(new URL('../electron/native-ffmpeg.cjs', import.meta.url), 'utf8');
 const fallback = read(new URL('../src/engineFallback.js', import.meta.url), 'utf8');
-const production = read(new URL('../src/productionRenderer.js', import.meta.url), 'utf8');
-const final = read(new URL('../src/finalRenderer.js', import.meta.url), 'utf8');
+const productionAudit = read(new URL('../src/productionRenderer.js', import.meta.url), 'utf8');
+const finalAudit = read(new URL('../src/finalRenderer.js', import.meta.url), 'utf8');
 const studio = read(new URL('../src/ProductionApp.jsx', import.meta.url), 'utf8');
 assert.ok(native.includes("ipcMain.handle('native-ffmpeg:cancel'"), 'El motor nativo debe admitir cancelación.');
 assert.ok(native.includes("ipcMain.handle('native-ffmpeg:exec'"), 'El motor nativo debe procesar archivos.');
 assert.ok(native.includes("safeFilename(name)"), 'Los nombres temporales deben validarse.');
 assert.ok(fallback.includes('await engine?.close?.()'), 'El motor alternativo debe limpiar sesiones.');
 assert.ok(fallback.includes("engine?.off?.('progress'"), 'Evitar fugas de listeners de progreso.');
-assert.ok(production.includes('withEngineFallback('), 'El render completo debe usar dos motores.');
-assert.ok(final.includes('withEngineFallback('), 'El render alternativo debe usar dos motores.');
+assert.ok(productionAudit.includes('withEngineFallback('), 'El render completo debe usar dos motores.');
+assert.ok(finalAudit.includes('withEngineFallback('), 'El render alternativo debe usar dos motores.');
 assert.ok(studio.includes('ProcessingOptionsPanel'), 'El usuario debe poder elegir el motor.');
 assert.ok(smoke.includes("method: 'native', fallback: false"), 'La prueba real debe forzar el motor nativo.');
 assert.ok(smoke.includes("method: 'wasm', fallback: false"), 'La prueba real debe forzar WASM.');
