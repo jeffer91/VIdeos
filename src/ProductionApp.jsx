@@ -1072,17 +1072,27 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     const fullSeconds = Math.max(0.1, (cutTake.durationMs || 0) / 1000);
     const start = Math.min(Math.max(0, Number(trimStart) || 0), Math.max(0, fullSeconds - 0.3));
     const duration = Math.min(10, Math.max(0.3, (Number(trimEnd) || fullSeconds) - start));
+    const controller = new AbortController();
+    processControllerRef.current = controller;
+    setProcessStartedAt(Date.now());
+    setProcessElapsed(0);
+    setProcessState({ phase: 'loading', method: '', progress: null, diagnostics: [] });
     setAudioPreviewBusy(true);
     setAudioPreviewError('');
     setAudioComparison(null);
     try {
-      const samples = await createAudioComparison(cutTake.blob, start, duration, audioEffects);
+      const samples = await createAudioComparison(cutTake.blob, start, duration, audioEffects, {
+        ...processOptions, signal: controller.signal, onStatus: setProcessState,
+      });
+      if (!samples.original?.size || !samples.improved?.size) throw new Error('La comparación no generó archivos válidos.');
       setAudioComparison(samples);
       setAudioPreviewChoice('improved');
     } catch (caught) {
       console.error('No se pudo comparar el audio:', caught);
       setAudioPreviewError(caught?.message || 'No se pudo crear la muestra de audio.');
     } finally {
+      if (processControllerRef.current === controller) processControllerRef.current = null;
+      setProcessStartedAt(0);
       setAudioPreviewBusy(false);
     }
   }
@@ -1114,17 +1124,26 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
       return;
     }
 
+    const controller = new AbortController();
+    processControllerRef.current = controller;
+    setProcessStartedAt(Date.now());
+    setProcessElapsed(0);
+    setProcessState({ phase: 'loading', method: '', progress: null, diagnostics: [] });
     setCutting(true);
     setCutProgress(0);
     setError('');
     try {
       const unchanged = start <= 0.01 && Math.abs(end - fullDuration) <= 0.05 && !ranges.length;
       const effects = normalizeAudioEffects(audioEffects);
+      const processing = { ...processOptions, signal: controller.signal, onStatus: setProcessState };
       const cleanedBlob = unchanged
         ? (hasAudioEffects(effects)
-          ? await enhanceMediaAudio(cutTake.blob, cutTake.mode || 'video', effects, setCutProgress)
+          ? await enhanceMediaAudio(cutTake.blob, cutTake.mode || 'video', effects, setCutProgress, processing)
           : cutTake.blob)
-        : await cutMedia(cutTake.blob, cutTake.mode || 'video', start, end, ranges, setCutProgress, effects);
+        : await cutMedia(cutTake.blob, cutTake.mode || 'video', start, end, ranges, setCutProgress, effects, processing);
+      if (controller.signal.aborted) throw new Error('Procesamiento cancelado por el usuario.');
+      if (!(cleanedBlob instanceof Blob) || !cleanedBlob.size) throw new Error('El procesador devolvió un resultado vacío.');
+
       const nextTake = {
         ...cutTake,
         cleanedBlob,
@@ -1147,6 +1166,8 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
       console.error(caught);
       setError(caught.message || 'No se pudo aplicar el corte. El original permanece intacto.');
     } finally {
+      if (processControllerRef.current === controller) processControllerRef.current = null;
+      setProcessStartedAt(0);
       setCutting(false);
     }
   }
@@ -1521,7 +1542,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
     </div>
     <small className="cut-audio-footnote">{hasAudioEffects(audioEffects) ? 'Guarda el corte para aplicar los efectos. El original no se modifica.' : 'Sin efectos: sonido original.'}</small>
   </aside>
-</div><div className="trim-controls"><label><span>Inicio</span><input type="number" min="0" step="0.1" value={trimStart} onChange={(event) => setTrimStart(Number(event.target.value))} /></label><div className="trim-track"><div /><span>{formatTime(cutTake.durationMs || 0)}</span></div><label><span>Final</span><input type="number" min="0.1" step="0.1" value={trimEnd} onChange={(event) => setTrimEnd(Number(event.target.value))} /></label></div><div className="internal-cut-editor"><strong>Cortes internos</strong><div className="internal-cut-inputs"><label><span>Desde</span><input type="number" min={trimStart} step="0.1" value={rangeStart} onChange={(event) => setRangeStart(Number(event.target.value))} /></label><label><span>Hasta</span><input type="number" min={trimStart} step="0.1" value={rangeEnd} onChange={(event) => setRangeEnd(Number(event.target.value))} /></label><button className="secondary-button" onClick={addInternalCut}>Eliminar tramo</button></div><div className="cut-range-list">{removedRanges.length ? removedRanges.map((range, index) => <span key={`${range.start}-${range.end}-${index}`}>{range.start.toFixed(1)}–{range.end.toFixed(1)} s <button onClick={() => setRemovedRanges((old) => old.filter((_item, i) => i !== index))}>×</button></span>) : <small>Sin cortes internos.</small>}</div></div><div className="cut-summary"><span>Original: {formatTime(cutTake.durationMs)}</span><span>Salida estimada: {formatTime(cleanedDurationSeconds(Number(trimStart) || 0, Number(trimEnd) || 0, removedRanges) * 1000)}</span><span>{cutTake.cleanedBlob ? `Limpia: ${formatBytes(cutTake.cleanedBlob.size)}` : 'Sin versión limpia'}</span></div><button className="primary-button" onClick={applyCut} disabled={cutting || audioPreviewBusy}>{cutting ? `Procesando ${Math.round(cutProgress * 100)}%` : 'Guardar corte limpio'}</button></> : <div className="empty-state">Selecciona una diapositiva grabada y aceptada.</div>}</div>
+</div><div className="trim-controls"><label><span>Inicio</span><input type="number" min="0" step="0.1" value={trimStart} onChange={(event) => setTrimStart(Number(event.target.value))} /></label><div className="trim-track"><div /><span>{formatTime(cutTake.durationMs || 0)}</span></div><label><span>Final</span><input type="number" min="0.1" step="0.1" value={trimEnd} onChange={(event) => setTrimEnd(Number(event.target.value))} /></label></div><div className="internal-cut-editor"><strong>Cortes internos</strong><div className="internal-cut-inputs"><label><span>Desde</span><input type="number" min={trimStart} step="0.1" value={rangeStart} onChange={(event) => setRangeStart(Number(event.target.value))} /></label><label><span>Hasta</span><input type="number" min={trimStart} step="0.1" value={rangeEnd} onChange={(event) => setRangeEnd(Number(event.target.value))} /></label><button className="secondary-button" onClick={addInternalCut}>Eliminar tramo</button></div><div className="cut-range-list">{removedRanges.length ? removedRanges.map((range, index) => <span key={`${range.start}-${range.end}-${index}`}>{range.start.toFixed(1)}–{range.end.toFixed(1)} s <button onClick={() => setRemovedRanges((old) => old.filter((_item, i) => i !== index))}>×</button></span>) : <small>Sin cortes internos.</small>}</div></div><div className="cut-summary"><span>Original: {formatTime(cutTake.durationMs)}</span><span>Salida estimada: {formatTime(cleanedDurationSeconds(Number(trimStart) || 0, Number(trimEnd) || 0, removedRanges) * 1000)}</span><span>{cutTake.cleanedBlob ? `Limpia: ${formatBytes(cutTake.cleanedBlob.size)}` : 'Sin versión limpia'}</span></div><button className="primary-button" onClick={applyCut} disabled={cutting || audioPreviewBusy}>{cutting ? 'Procesando · ' + (cutProgress > 0 ? Math.round(cutProgress * 100) + '%' : processElapsed + ' s') : 'Guardar corte limpio'}</button></> : <div className="empty-state">Selecciona una diapositiva grabada y aceptada.</div>}</div>
             </div>
             {showCutResult && cutTake?.cleanedBlob && <div className="cut-result-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowCutResult(false); }}><section className="cut-result-dialog" role="dialog" aria-modal="true" aria-label="Vista previa del corte procesado" onKeyDown={(event) => { if (event.key === 'Escape') setShowCutResult(false); }}><div className="cut-result-dialog-header"><strong>Resultado procesado · Escena {cutSlide?.number}</strong><button type="button" onClick={() => setShowCutResult(false)} autoFocus>Cerrar ×</button></div>{cutTake.mode === 'audio' ? <audio controls autoPlay src={cutResultUrl} /> : <video controls autoPlay playsInline src={cutResultUrl} />}<p>Esta es la versión limpia guardada. La grabación original sigue intacta.</p></section></div>}
           </section>
