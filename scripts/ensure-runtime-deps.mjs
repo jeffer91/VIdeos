@@ -14,6 +14,7 @@ if (major < 22 || (major === 22 && minor < 12)) {
 async function checkRuntime() {
   try {
     require('electron-updater');
+    if (process.platform === 'win32' && !require('ffmpeg-static')) throw new Error('Falta el motor FFmpeg nativo.');
     require.resolve('electron');
     const rollupPackage = require('rollup/package.json');
     if (rollupPackage.name !== '@rollup/wasm-node') throw new Error('Actualiza Rollup a la variante WASM del proyecto.');
@@ -34,7 +35,7 @@ const result = spawnSync('npm', ['install', '--include=optional', '--no-audit', 
 // Validate in a fresh process so repaired modules do not use a cached failed import.
 if (result.status === 0) {
   const check = spawnSync(process.execPath, ['--input-type=module', '-e',
-    "import {createRequire} from 'node:module'; const r=createRequire(import.meta.url); r('electron-updater'); r.resolve('electron'); if(r('rollup/package.json').name!=='@rollup/wasm-node') throw Error('Rollup debe usar WASM'); r('rollup'); await import('vite');"],
+    "import {createRequire} from 'node:module'; const r=createRequire(import.meta.url); r('electron-updater'); r.resolve('electron'); if(process.platform==='win32' && !r('ffmpeg-static')) throw Error('Falta FFmpeg nativo'); if(r('rollup/package.json').name!=='@rollup/wasm-node') throw Error('Rollup debe usar WASM'); r('rollup'); await import('vite');"],
   { cwd: root, stdio: 'inherit' });
   if (check.status === 0) process.exit(0);
 }

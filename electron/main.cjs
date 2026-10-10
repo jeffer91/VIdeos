@@ -1,6 +1,7 @@
 const { app, BrowserWindow, session, ipcMain, dialog, shell, clipboard } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
+const { registerNativeFFmpegIpc } = require('./native-ffmpeg.cjs');
 const { fileURLToPath } = require('node:url');
 
 let autoUpdater = null;
@@ -559,7 +560,8 @@ app.whenReady().then(async () => {
   configureMediaPermissions();
   configureLibraryIpc();
   configureFFmpegCoreIpc();
-configureClipboardIpc();
+  registerNativeFFmpegIpc(assertTrustedIpc);
+  configureClipboardIpc();
   configureUpdateIpc();
   rendererUrl = await startRenderer();
   await createWindow();
