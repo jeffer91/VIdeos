@@ -86,6 +86,8 @@ async function runNative(session, args, duration, send) {
   if (!program) throw new Error('No está disponible FFmpeg nativo. Utiliza el motor WebAssembly.');
   validateArgs(args);
   let resolved = false;
+  let lastActivityAt = Date.now();
+  let timedOut = false;
   session.cancelled = false;
   const expected = Number(duration) || 0;
   const child = spawn(program, ['-nostdin','-y','-hide_banner','-loglevel','error','-progress','pipe:1',...args], {
@@ -95,6 +97,7 @@ async function runNative(session, args, duration, send) {
   session.lastError = '';
   session.startedAt = Date.now();
   const sendProgress = (line) => {
+    lastActivityAt = Date.now();
     const match = line.match(/^out_time_(?:ms|us)=(\d+)$/);
     if (match) {
       const seconds = Number(match[1]) / 1e6;
@@ -112,18 +115,28 @@ async function runNative(session, args, duration, send) {
     }
   });
   child.stderr.on('data', (chunk) => {
+    lastActivityAt = Date.now();
     session.lastError = (session.lastError + chunk.toString('utf8')).slice(-5000);
   });
+  const watchdog = setInterval(() => {
+    if (session.child === child && Date.now() - lastActivityAt > 120000) {
+      timedOut = true;
+      child.kill('SIGKILL');
+    }
+  }, 5000);
   return await new Promise((resolve, reject) => {
     child.on('error', (error) => {
       if (resolved) return; resolved = true;
+      clearInterval(watchdog);
       session.child = null;
       reject(new Error('No pudo iniciarse FFmpeg nativo: ' + error.message));
     });
     child.on('close', (code) => {
       if (resolved) return; resolved = true;
+      clearInterval(watchdog);
       session.child = null;
-      if (session.cancelled) reject(new Error('Procesamiento cancelado por el usuario.'));
+      if (timedOut) reject(new Error('FFmpeg nativo no informó avances durante 120 segundos; se detuvo para probar otro motor.'));
+      else if (session.cancelled) reject(new Error('Procesamiento cancelado por el usuario.'));
       else if (code !== 0) reject(new Error('FFmpeg nativo falló: ' + (session.lastError || 'código ' + code).slice(-1500)));
       else {send({ phase: 'done', progress: 1, elapsedMs: Date.now() - session.startedAt });resolve(0);}
     });

@@ -68,3 +68,5 @@ assert.ok(finalAudit.includes('withEngineFallback('), 'El render alternativo deb
 assert.ok(studio.includes('ProcessingOptionsPanel'), 'El usuario debe poder elegir el motor.');
 assert.ok(smoke.includes("method: 'native', fallback: false"), 'La prueba real debe forzar el motor nativo.');
 assert.ok(smoke.includes("method: 'wasm', fallback: false"), 'La prueba real debe forzar WASM.');
+
+assert.ok(native.includes("Date.now() - lastActivityAt > 120000"), 'Debe existir un detector de bloqueo del motor nativo.');

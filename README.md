@@ -115,3 +115,13 @@ La ventana mantiene `contextIsolation`, `nodeIntegration` desactivado, `sandbox`
 ## Pendiente
 
 El motor que renderizará el MP4 final todavía no está implementado. La app actualmente prepara y valida el proyecto para esa fase; no debe considerarse terminado el flujo de exportación hasta que el renderer final genere la secuencia real de escenas, CTA, transiciones, memes, intro y ending.
+
+## Procesamiento con dos motores (Windows)
+
+Videos Studio elige **FFmpeg nativo de Windows** como motor principal para las grabaciones Full HD. El instalador incluye el ejecutable nativo; la copia de desarrollo lo obtiene automáticamente con `npm start` mediante las dependencias de npm. **FFmpeg WebAssembly** queda disponible como segunda alternativa.
+
+En **Corte** y **Resultado** puedes elegir **Automático**, **Nativo** o **WebAssembly**, y activar o desactivar **Usar el otro motor si falla el primero**. Si el procesamiento falla, la aplicación cierra la sesión temporal fallida antes de iniciar el otro motor. Si el motor nativo deja de enviar avances durante dos minutos, se detiene y puede intentar el respaldo. Si el procesamiento se vuelve demasiado lento, el botón **Cancelar de forma segura** detiene el trabajo actual; no borra el video original ni la versión limpia previamente aprobada.
+
+Los archivos temporales se procesan dentro de un directorio aislado y se borran al finalizar la sesión. Las regrabaciones pendientes y versiones limpias siguen guardadas en IndexedDB. El proceso de exportación definitiva requiere volver a verificar el resultado de audio y video con grabaciones reales antes de considerarlo terminado.
+
+No instales FFmpeg manualmente desde sitios desconocidos. Las compilaciones de GitHub Actions incorporan el motor nativo y hacen pruebas reales de FFmpeg y su alternativa WebAssembly.
