@@ -3,6 +3,9 @@ import RecordingViewEnhancer, { FramingGuides } from './RecordingViewEnhancer';
 import { readPrompterPreference, waitForCountdown } from './recordingPreferences';
 import { cutMedia, enhanceMediaAudio, createAudioComparison } from './ffmpeg';
 import { DEFAULT_AUDIO_EFFECTS, normalizeAudioEffects, hasAudioEffects } from './audioEffects';
+import { readProcessingPreferences, saveProcessingPreferences } from './processingPreferences';
+import ProcessingOptionsPanel from './ProcessingOptionsPanel';
+import './processing-options.css';
 import { AI_MASTER_PROMPT, parseSlides } from './parser';
 import { CINEMA_MASTER_PROMPT } from './cinemaPrompt';
 import {
@@ -219,6 +222,11 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
   const [rangeEnd, setRangeEnd] = useState(0);
   const [cutting, setCutting] = useState(false);
   const [cutProgress, setCutProgress] = useState(0);
+  const [processOptions, setProcessOptions] = useState(readProcessingPreferences);
+  const [processState, setProcessState] = useState({ phase: 'idle', method: '', progress: null, diagnostics: [] });
+  const [processElapsed, setProcessElapsed] = useState(0);
+  const [processStartedAt, setProcessStartedAt] = useState(0);
+  const processControllerRef = useRef(null);
   const [audioEffects, setAudioEffects] = useState(DEFAULT_AUDIO_EFFECTS);
   const [audioPreviewBusy, setAudioPreviewBusy] = useState(false);
   const [audioComparison, setAudioComparison] = useState(null);
@@ -257,6 +265,22 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
   const meterFrameRef = useRef(null);
   const prompterRef = useRef(null);
   const mountedRef = useRef(true);
+
+  useEffect(() => {
+    if (!processStartedAt) return undefined;
+    const update = () => setProcessElapsed(Math.floor((Date.now() - processStartedAt) / 1000));
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [processStartedAt]);
+
+  function updateProcessOptions(value) {
+    setProcessOptions(saveProcessingPreferences(value));
+  }
+  function cancelProcessing() {
+    processControllerRef.current?.abort();
+    setProcessState((old) => ({ ...old, phase: 'cancelling' }));
+  }
 
   const currentSlide = project?.slides?.[currentSlideIndex] || null;
   const currentTake = currentSlide ? takes[currentSlide.number] : null;
@@ -1487,6 +1511,7 @@ export default function ProductionApp({ contentMode = 'football', onChangeConten
   <div className="cut-video">{cutTake.mode === 'audio' ? <audio src={cutUrl} data-blob-size={cutBlob?.size || 0} controls /> : <video src={cutUrl} data-blob-size={cutBlob?.size || 0} controls playsInline />}</div>
   <aside className="cut-audio-panel" aria-label="Mejoras de audio">
     <div className="cut-audio-heading"><span className="cut-audio-icon">♫</span><div><strong>MEJORAS DE AUDIO</strong><small>Efectos de esta diapositiva</small></div></div>
+    <ProcessingOptionsPanel options={processOptions} onChange={updateProcessOptions} busy={cutting || audioPreviewBusy} state={processState} elapsed={processElapsed} progress={cutProgress} onCancel={cancelProcessing} />
     <label className="cut-audio-toggle"><span><strong>Reducir ruido</strong><small>Ruido de ventilación o ambiente</small></span><input type="checkbox" checked={audioEffects.noiseReduction} onChange={() => toggleAudioEffect('noiseReduction')} disabled={cutting || audioPreviewBusy} /><i aria-hidden="true" /></label>
     <label className="cut-audio-toggle"><span><strong>Mejorar voz</strong><small>Claridad y volumen equilibrado</small></span><input type="checkbox" checked={audioEffects.voiceEnhancement} onChange={() => toggleAudioEffect('voiceEnhancement')} disabled={cutting || audioPreviewBusy} /><i aria-hidden="true" /></label>
     <div className="cut-audio-compare">
