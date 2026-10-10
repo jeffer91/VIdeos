@@ -1,6 +1,7 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import { audioFilterChain, hasAudioEffects } from './audioEffects';
+import { withEngineFallback } from './engineFallback';
 
 let ffmpegInstance = null;
 let loadingPromise = null;
@@ -233,8 +234,7 @@ async function runMultipleRanges(ffmpeg, inputName, outputName, mode, ranges, au
   ], audioEffects, 'recortar el video');
 }
 
-export async function optimizeMedia(blob, mode, onProgress) {
-  const ffmpeg = await getFFmpeg();
+async function optimizeMediaCore(blob, mode, onProgress, ffmpeg) {
   const inputExt = extensionFromMime(blob.type);
   const stamp = Date.now();
   const inputName = `input-${stamp}.${inputExt}`;
@@ -279,13 +279,13 @@ export async function optimizeMedia(blob, mode, onProgress) {
   }
 }
 
-export async function cutMedia(blob, mode, startSeconds, endSeconds, removedRanges = [], onProgress, audioEffects = {}) {
-  const ffmpeg = await getFFmpeg();
+async function cutMediaCore(blob, mode, startSeconds, endSeconds, removedRanges, onProgress, audioEffects, ffmpeg) {
   const start = Math.max(0, Number(startSeconds) || 0);
   const end = Math.max(start + 0.05, Number(endSeconds) || start + 0.05);
   const ranges = keepRanges(start, end, removedRanges);
   if (!ranges.length) throw new Error('Los cortes eliminarían todo el archivo.');
 
+  ffmpeg.setExpectedDuration?.(end - start);
   const inputExt = extensionFromMime(blob.type);
   const stamp = Date.now();
   const inputName = `cut-input-${stamp}.${inputExt}`;
@@ -312,12 +312,12 @@ export async function cutMedia(blob, mode, startSeconds, endSeconds, removedRang
 }
 
 // Apply audio filters while converting the unchanged source to a compatible MP4.
-export async function enhanceMediaAudio(blob, mode, effects = {}, onProgress) {
+async function enhanceMediaAudioCore(blob, mode, effects, onProgress, ffmpeg) {
   if (!hasAudioEffects(effects)) return blob;
-  const ffmpeg = await getFFmpeg();
   const stamp = outputNameFor('audio');
   const inputName = `${stamp}-input.${extensionFromMime(blob.type)}`;
   const outputName = mode === 'audio' ? `${stamp}-output.m4a` : `${stamp}-output.mp4`;
+  ffmpeg.setExpectedDuration?.(mode === 'audio' ? 0 : 0);
   progressCallback = onProgress || null;
   progressCallback?.(0);
   try {
@@ -341,15 +341,15 @@ export async function enhanceMediaAudio(blob, mode, effects = {}, onProgress) {
 }
 
 // Short A/B samples are made from exactly the same source and time window.
-export async function createAudioComparison(blob, startSeconds, durationSeconds, effects) {
+async function createAudioComparisonCore(blob, startSeconds, durationSeconds, effects, ffmpeg) {
   if (!hasAudioEffects(effects)) throw new Error('Activa al menos un efecto para comparar.');
-  const ffmpeg = await getFFmpeg();
   const stamp = outputNameFor('compare');
   const input = `${stamp}-input.${extensionFromMime(blob.type)}`;
   const original = `audio-original-${stamp}.m4a`;
   const improved = `audio-enhanced-${stamp}.m4a`;
   const start = Math.max(0, Number(startSeconds) || 0);
   const duration = Math.min(12, Math.max(0.3, Number(durationSeconds) || 8));
+  ffmpeg.setExpectedDuration?.(duration);
   try {
     await ffmpeg.writeFile(input, await fetchFile(blob));
     const common = ['-ss', String(start), '-i', input, '-t', String(duration), '-vn', '-map', '0:a:0'];
@@ -364,6 +364,57 @@ export async function createAudioComparison(blob, startSeconds, durationSeconds,
   }
 }
 
-export async function trimMedia(blob, mode, startSeconds, endSeconds, onProgress) {
-  return cutMedia(blob, mode, startSeconds, endSeconds, [], onProgress);
+// The native engine handles Full HD videos on Windows. WebAssembly is always
+// an explicit alternative. Failed processing never mutates the source Blob.
+const processOptions = (options = {}, onProgress) => ({
+  ...options,
+  onProgress: (progress) => {
+    onProgress?.(progress);
+    options.onProgress?.(progress);
+  },
+  onWasmTerminated: (engine) => {
+    if (ffmpegInstance === engine) {
+      ffmpegInstance = null;
+      progressListenerBound = false;
+      loadingPromise = null;
+    }
+  },
+});
+
+export async function optimizeMedia(blob, mode, onProgress, options = {}) {
+  const done = await withEngineFallback(
+    (engine) => optimizeMediaCore(blob, mode, onProgress, engine),
+    getFFmpeg, processOptions(options, onProgress),
+  );
+  return done.result;
 }
+
+export async function cutMedia(blob, mode, startSeconds, endSeconds, removedRanges = [], onProgress, audioEffects = {}, options = {}) {
+  const done = await withEngineFallback(
+    (engine) => cutMediaCore(blob, mode, startSeconds, endSeconds, removedRanges, onProgress, audioEffects, engine),
+    getFFmpeg, processOptions(options, onProgress),
+  );
+  return done.result;
+}
+
+export async function enhanceMediaAudio(blob, mode, effects = {}, onProgress, options = {}) {
+  if (!hasAudioEffects(effects)) return blob;
+  const done = await withEngineFallback(
+    (engine) => enhanceMediaAudioCore(blob, mode, effects, onProgress, engine),
+    getFFmpeg, processOptions(options, onProgress),
+  );
+  return done.result;
+}
+
+export async function createAudioComparison(blob, startSeconds, durationSeconds, effects, options = {}) {
+  const done = await withEngineFallback(
+    (engine) => createAudioComparisonCore(blob, startSeconds, durationSeconds, effects, engine),
+    getFFmpeg, processOptions(options),
+  );
+  return done.result;
+}
+
+export async function trimMedia(blob, mode, startSeconds, endSeconds, onProgress, options = {}) {
+  return cutMedia(blob, mode, startSeconds, endSeconds, [], onProgress, {}, options);
+}
+
